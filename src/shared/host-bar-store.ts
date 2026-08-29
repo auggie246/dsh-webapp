@@ -24,10 +24,13 @@ export function validateBarEntry(raw: unknown): BarEntry | null {
   const entry = raw as Record<string, unknown>;
   if (typeof entry.id !== "string" || entry.id === "") return null;
   if (entry.kind !== "spawn" && entry.kind !== "attach") return null;
+  // A Spawn entry may hold port 0: its OS-picked port is only known after
+  // the first URL line. An Attach entry must name a real port.
+  const minPort = entry.kind === "spawn" ? 0 : 1;
   if (
     typeof entry.port !== "number" ||
     !Number.isInteger(entry.port) ||
-    entry.port < 1 ||
+    entry.port < minPort ||
     entry.port > 65_535
   ) {
     return null;

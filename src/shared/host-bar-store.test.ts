@@ -64,6 +64,17 @@ describe("Host bar store", () => {
     expect(loadHostBar(file)).toEqual([ENTRY]);
   });
 
+  test("a Spawn entry may persist port 0 — the random port is not known yet", () => {
+    const file = join(tempDir(), "host-bar.json");
+    writeFileSync(
+      file,
+      JSON.stringify([{ id: "s-1", kind: "spawn", port: 0, label: "Host 1" }])
+    );
+    expect(loadHostBar(file)).toEqual([
+      { id: "s-1", kind: "spawn", port: 0, label: "Host 1" },
+    ]);
+  });
+
   test("an empty bar persists and loads as an empty bar", () => {
     const file = join(tempDir(), "host-bar.json");
     saveHostBar(file, []);
