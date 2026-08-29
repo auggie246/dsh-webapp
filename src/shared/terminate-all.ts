@@ -5,7 +5,7 @@
 // never hang on a misbehaving child.
 export interface Killable {
   pid?: number;
-  kill(signal: string): boolean;
+  kill(signal?: NodeJS.Signals | number): boolean;
   exitCode: number | null;
   signalCode: string | null;
   once(event: "close", listener: () => void): unknown;

@@ -78,7 +78,7 @@ function pickVersion(versions: string[], want: string): string | null {
   );
 }
 
-function highest(versions: string[]): string {
+function highest(versions: string[]): string | null {
   const sorted = [...versions].sort((a, b) =>
     b.localeCompare(a, undefined, { numeric: true })
   );

@@ -1,0 +1,127 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #1e1f22;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+}
+
+#rail {
+  width: 68px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+#hosts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.host {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 16px;
+  background: #313338;
+  color: #dbdee1;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.host:hover {
+  background: #404249;
+}
+
+.host.active {
+  box-shadow: inset 0 0 0 2px #f2f3f5;
+}
+
+.dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #1e1f22;
+}
+
+.host.ready .dot {
+  background: #23a55a;
+}
+
+.host.starting .dot {
+  background: #f0b232;
+}
+
+.host.offline .dot {
+  background: #80848e;
+}
+
+#add {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 16px;
+  background: #313338;
+  color: #23a55a;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+#add:hover {
+  background: #404249;
+}
+
+#port-entry {
+  display: flex;
+}
+
+#port-entry[hidden] {
+  display: none;
+}
+
+#port-input {
+  width: 56px;
+  height: 28px;
+  border: 1px solid #404249;
+  border-radius: 6px;
+  background: #111214;
+  color: #dbdee1;
+  text-align: center;
+  font-size: 13px;
+  outline: none;
+}
+
+#port-input.invalid {
+  border-color: #f23f43;
+}

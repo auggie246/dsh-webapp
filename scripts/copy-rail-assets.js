@@ -4,12 +4,10 @@ const { copyFileSync, mkdirSync } = require("node:fs");
 const path = require("node:path");
 
 mkdirSync(path.join(__dirname, "..", "dist", "rail"), { recursive: true });
-copyFileSync(
-  path.join(__dirname, "..", "src", "rail", "rail.html"),
-  path.join(__dirname, "..", "dist", "rail", "rail.html")
-);
-copyFileSync(
-  path.join(__dirname, "..", "src", "rail", "rail.css"),
-  path.join(__dirname, "..", "dist", "rail", "rail.css")
-);
+for (const name of ["rail.html", "rail.css", "rail.js"]) {
+  copyFileSync(
+    path.join(__dirname, "..", "src", "rail", name),
+    path.join(__dirname, "..", "dist", "rail", name)
+  );
+}
 console.log("rail assets copied to dist/rail");

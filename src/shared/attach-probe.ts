@@ -29,7 +29,20 @@ export function hostDescribeEnvelope(rpcId: string): string {
 
 interface DescribeBody {
   type?: unknown;
-  result?: { ok?: unknown; value?: Record<string, unknown> } | unknown;
+  result?: unknown;
+}
+
+/** Narrows the describe answer to a `server-response` with `ok: true`. */
+function okValue(body: unknown): Record<string, unknown> | null {
+  if (typeof body !== "object" || body === null) return null;
+  if ((body as DescribeBody).type !== "server-response") return null;
+  const result = (body as DescribeBody).result;
+  if (typeof result !== "object" || result === null) return null;
+  if ((result as { ok?: unknown }).ok !== true) return null;
+  const value = (result as { value?: unknown }).value;
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 export async function probeHost(
@@ -50,17 +63,11 @@ export async function probeHost(
     if (response.status !== 200) {
       return { ok: false, reason: `HTTP ${response.status}` };
     }
-    const body = (await response.json().catch(() => null)) as DescribeBody | null;
-    if (
-      !body ||
-      body.type !== "server-response" ||
-      typeof body.result !== "object" ||
-      body.result === null ||
-      body.result.ok !== true
-    ) {
+    const body = (await response.json().catch(() => null)) as unknown;
+    const value = okValue(body);
+    if (!value) {
       return { ok: false, reason: "port answered but not as a Host (host.describe not ok)" };
     }
-    const value = body.result.value ?? {};
     return {
       ok: true,
       info: {

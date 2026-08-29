@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'"
+    />
+    <title>DSH Desktop</title>
+    <link rel="stylesheet" href="rail.css" />
+  </head>
+  <body>
+    <nav id="rail" aria-label="Host bar">
+      <div id="hosts"></div>
+      <button id="add" title="Add a Host" aria-label="Add a Host">+</button>
+      <form id="port-entry" hidden>
+        <input
+          id="port-input"
+          inputmode="numeric"
+          placeholder="Port"
+          title="Attach to a Host at port (1–65535). Enter to add, Esc to cancel."
+        />
+      </form>
+    </nav>
+    <script src="rail.js"></script>
+  </body>
+</html>
