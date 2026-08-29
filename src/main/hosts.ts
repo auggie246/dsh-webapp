@@ -42,6 +42,8 @@ interface HostRecord {
 export class HostManager {
   private records = new Map<string, HostRecord>();
   private activeId: string | null = null;
+  /** Records whose start flow is in flight; guards double-starts. */
+  private starting = new Set<string>();
 
   constructor(private readonly deps: HostManagerDeps) {}
 
@@ -130,11 +132,19 @@ export class HostManager {
 
   private async startRecord(id: string): Promise<void> {
     const record = this.records.get(id);
-    if (!record || record.status === "starting") return;
+    // Status "starting" is display state (bootstrap sets it before the rail
+    // paints); re-entrancy is tracked separately, or the initial start would
+    // refuse itself.
+    if (!record || this.starting.has(id)) return;
+    this.starting.add(id);
     record.status = "starting";
     this.emit();
-    if (record.entry.kind === "spawn") await this.spawnRecord(record);
-    else await this.attachRecord(record);
+    try {
+      if (record.entry.kind === "spawn") await this.spawnRecord(record);
+      else await this.attachRecord(record);
+    } finally {
+      this.starting.delete(id);
+    }
   }
 
   private async spawnRecord(record: HostRecord): Promise<void> {
