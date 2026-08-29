@@ -12,19 +12,19 @@ const OK_BODY = JSON.stringify({
   },
 });
 
-interface TestHostServer {
+interface FakeHost {
   port: number;
   lastBody: string | null;
   lastContentType: string | null;
   close: () => Promise<void>;
 }
 
-async function startHostServer(
+async function startFakeHost(
   reply: { status?: number; body?: string; hang?: boolean } = {}
-): Promise<TestHostServer> {
+): Promise<FakeHost> {
   let lastBody: string | null = null;
   let lastContentType: string | null = null;
-  const server: Server = createServer((req: IncomingMessage, res) => {
+  const httpServer: Server = createServer((req: IncomingMessage, res) => {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
@@ -36,8 +36,8 @@ async function startHostServer(
       res.end(reply.body ?? OK_BODY);
     });
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const port = (server.address() as AddressInfo).port;
+  await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+  const port = (httpServer.address() as AddressInfo).port;
   let closed = false;
   return {
     port,
@@ -51,29 +51,29 @@ async function startHostServer(
       if (closed) return Promise.resolve();
       closed = true;
       return new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve()))
+        httpServer.close((error) => (error ? reject(error) : resolve()))
       );
     },
   };
 }
 
-const servers: TestHostServer[] = [];
+const fakeHosts: FakeHost[] = [];
 async function started(
-  reply?: Parameters<typeof startHostServer>[0]
-): Promise<TestHostServer> {
-  const server = await startHostServer(reply);
-  servers.push(server);
-  return server;
+  reply?: Parameters<typeof startFakeHost>[0]
+): Promise<FakeHost> {
+  const fakeHost = await startFakeHost(reply);
+  fakeHosts.push(fakeHost);
+  return fakeHost;
 }
 
 afterAll(async () => {
-  await Promise.all(servers.map((s) => s.close()));
+  await Promise.all(fakeHosts.map((fake) => fake.close()));
 });
 
 describe("probeHost", () => {
   test("answers ok with the Host's version and home", async () => {
-    const server = await started();
-    const result = await probeHost(server.port, { timeoutMs: 2000 });
+    const fakeHost = await started();
+    const result = await probeHost(fakeHost.port, { timeoutMs: 2000 });
     expect(result).toEqual({
       ok: true,
       info: { version: "0.1.1-rc.2", home: "/Users/augustine/.dsh", attachedSessions: 2 },
@@ -81,42 +81,42 @@ describe("probeHost", () => {
   });
 
   test("sends the host.describe client-request envelope as JSON", async () => {
-    const server = await started();
-    await probeHost(server.port, { timeoutMs: 2000 });
-    const envelope = JSON.parse(server.lastBody ?? "{}") as Record<string, unknown>;
+    const fakeHost = await started();
+    await probeHost(fakeHost.port, { timeoutMs: 2000 });
+    const envelope = JSON.parse(fakeHost.lastBody ?? "{}") as Record<string, unknown>;
     expect(envelope.type).toBe("client-request");
     expect(envelope.method).toBe("host.describe");
     expect(typeof envelope.rpcId).toBe("string");
-    expect(server.lastContentType).toContain("application/json");
+    expect(fakeHost.lastContentType).toContain("application/json");
   });
 
-  test("refuses a server that answers not-ok", async () => {
-    const server = await started({
+  test("refuses a fake Host that answers not-ok", async () => {
+    const fakeHost = await started({
       body: JSON.stringify({ type: "server-response", result: { ok: false } }),
     });
-    const result = await probeHost(server.port, { timeoutMs: 2000 });
+    const result = await probeHost(fakeHost.port, { timeoutMs: 2000 });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/host\.describe/);
   });
 
   test("refuses a non-200 answer", async () => {
-    const server = await started({ status: 403, body: "{}" });
-    const result = await probeHost(server.port, { timeoutMs: 2000 });
+    const fakeHost = await started({ status: 403, body: "{}" });
+    const result = await probeHost(fakeHost.port, { timeoutMs: 2000 });
     expect(result).toEqual({ ok: false, reason: "HTTP 403" });
   });
 
   test("refuses when no Host is listening", async () => {
-    const server = await started();
-    const deadPort = server.port;
-    await server.close();
+    const fakeHost = await started();
+    const deadPort = fakeHost.port;
+    await fakeHost.close();
     const result = await probeHost(deadPort, { timeoutMs: 2000 });
     expect(result.ok).toBe(false);
   });
 
   test("gives up after the timeout when the Host never answers", async () => {
-    const server = await started({ hang: true });
+    const fakeHost = await started({ hang: true });
     const startedAt = Date.now();
-    const result = await probeHost(server.port, { timeoutMs: 150 });
+    const result = await probeHost(fakeHost.port, { timeoutMs: 150 });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/150ms/);
     expect(Date.now() - startedAt).toBeLessThan(2000);

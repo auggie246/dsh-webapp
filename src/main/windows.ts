@@ -1,19 +1,16 @@
-// The one app window (item 1) and the per-Host views (ADR-0003). The rail
-// page paints the left rail; each Host renders in its own WebContentsView so
+// The one app window (item 1) and the per-Host views (ADR-0003). The Host bar
+// page paints the left bar; each Host renders in its own WebContentsView so
 // its page state survives switching. Views load the Host's localhost URL
 // (ADR-0002) — the app talks to the Host exactly like a browser does.
 import { BrowserWindow, WebContentsView } from "electron";
 import path from "node:path";
 
-export const RAIL_WIDTH = 68;
+export const HOST_BAR_WIDTH = 68;
 
 export class HostViews {
   private views = new Map<string, WebContentsView>();
 
-  constructor(
-    private readonly win: BrowserWindow,
-    private readonly railWidth: number = RAIL_WIDTH
-  ) {
+  constructor(private readonly win: BrowserWindow) {
     win.on("resize", () => this.layout());
   }
 
@@ -40,9 +37,9 @@ export class HostViews {
   private place(view: WebContentsView): void {
     const { width, height } = this.win.getContentBounds();
     view.setBounds({
-      x: this.railWidth,
+      x: HOST_BAR_WIDTH,
       y: 0,
-      width: Math.max(0, width - this.railWidth),
+      width: Math.max(0, width - HOST_BAR_WIDTH),
       height,
     });
   }
@@ -58,10 +55,10 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     backgroundColor: "#1e1f22",
     webPreferences: {
-      preload: path.join(__dirname, "rail-preload.js"),
+      preload: path.join(__dirname, "host-bar-preload.js"),
     },
   });
-  void win.loadFile(path.join(__dirname, "..", "rail", "rail.html"));
+  void win.loadFile(path.join(__dirname, "..", "host-bar", "host-bar.html"));
   win.once("ready-to-show", () => win.show());
   return win;
 }

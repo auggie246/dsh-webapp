@@ -13,7 +13,7 @@ import {
   saveHostBar,
   type BarEntry,
 } from "../shared/host-bar-store";
-import type { HostStatus, RailState } from "../shared/rail-protocol";
+import type { HostBarState, HostStatus } from "../shared/host-bar-protocol";
 import { spawnHostUntilUrl } from "../shared/spawn-host";
 
 export const DEFAULT_ATTACH_PORT = 3080;
@@ -25,7 +25,7 @@ export interface HostViewsSink {
 
 export interface HostManagerDeps {
   barFile: string;
-  onChanged(state: RailState): void;
+  onChanged(state: HostBarState): void;
   createView(url: string): WebContentsView;
   views: HostViewsSink;
   log?(...parts: unknown[]): void;
@@ -47,7 +47,7 @@ export class HostManager {
 
   constructor(private readonly deps: HostManagerDeps) {}
 
-  railState(): RailState {
+  hostBarState(): HostBarState {
     return {
       hosts: [...this.records.values()].map((record) => ({
         id: record.entry.id,
@@ -191,9 +191,7 @@ export class HostManager {
       this.installView(record, record.url);
     } else {
       record.status = "offline";
-      this.log(
-        `no Host on port ${record.entry.port}: ${probe.ok ? "" : probe.reason}`
-      );
+      this.log(`no Host on port ${record.entry.port}: ${probe.reason}`);
     }
     this.emit();
   }
@@ -252,7 +250,7 @@ export class HostManager {
   }
 
   private emit(): void {
-    this.deps.onChanged(this.railState());
+    this.deps.onChanged(this.hostBarState());
   }
 
   private log(...parts: unknown[]): void {

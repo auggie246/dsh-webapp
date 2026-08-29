@@ -65,7 +65,7 @@ export function spawnHostUntilUrl(
 
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (chunk: string) => {
-      const lines = chunk.split("\n").filter((l) => l.trim() !== "");
+      const lines = chunk.split("\n").filter((line) => line.trim() !== "");
       stderrTail = [...stderrTail, ...lines].slice(-5);
     });
 

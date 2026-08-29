@@ -1,6 +1,6 @@
-// The rail (Host bar, item 3). Plain DOM glue on purpose: it renders the
-// state main pushes over window.dshDesktop and sends back user intents.
-// All page state of a Host lives in its own view, not here.
+// The Host bar (item 3). Plain DOM glue on purpose: it renders the state
+// main pushes over window.dshDesktop and sends back user intents. All page
+// state of a Host lives in its own view, not here.
 "use strict";
 
 const state = { hosts: [] };

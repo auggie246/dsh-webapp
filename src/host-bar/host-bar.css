@@ -16,7 +16,7 @@ body {
   font-family: system-ui, sans-serif;
 }
 
-#rail {
+#host-bar {
   width: 68px;
   height: 100%;
   display: flex;

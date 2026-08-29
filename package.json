@@ -6,7 +6,7 @@
   "description": "Desktop shell for the DeepSeek Harness (DSH) web GUI: window, attach-or-spawn, Host bar, hide-to-bar, quit-kills-host.",
   "main": "dist/main/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-rail-assets.js",
+    "build": "tsc -p tsconfig.json && node scripts/copy-host-bar-assets.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "start": "electron ."

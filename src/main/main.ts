@@ -9,9 +9,9 @@ import { HostManager } from "./hosts";
 import { createMainWindow, HostViews } from "./windows";
 import { createTray } from "./tray";
 import { terminateAll } from "../shared/terminate-all";
+import { parsePortText } from "../shared/port";
 
 const isMac = process.platform === "darwin";
-const QUIT_KILL_GRACE_MS = 5000;
 
 let win: BrowserWindow | null = null;
 let manager: HostManager | null = null;
@@ -43,27 +43,22 @@ function installAppMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-function parsePortText(text: unknown): number | null {
-  if (typeof text !== "string") return null;
-  const trimmed = text.trim();
-  if (!/^\d+$/.test(trimmed)) return null;
-  const port = Number(trimmed);
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) return null;
-  return port;
-}
-
 function wireIpc(): void {
-  ipcMain.handle("rail:get-state", () => manager?.railState() ?? { hosts: [] });
+  ipcMain.handle("host-bar:get-state", () => manager?.hostBarState() ?? { hosts: [] });
 
-  ipcMain.on("rail:select", (_event, id: unknown) => {
+  ipcMain.on("host-bar:select", (_event, id: unknown) => {
     if (typeof id === "string") manager?.select(id);
   });
 
-  ipcMain.on("rail:new-host", () => {
+  ipcMain.on("host-bar:new-host", () => {
     void manager?.newSpawn();
   });
 
-  ipcMain.on("rail:add-attach", (_event, portText: unknown) => {
+  ipcMain.on("host-bar:add-attach", (_event, portText: unknown) => {
+    if (typeof portText !== "string") {
+      log("ignored an invalid port:", portText);
+      return;
+    }
     const port = parsePortText(portText);
     if (port === null) {
       log("ignored an invalid port:", portText);
@@ -72,17 +67,21 @@ function wireIpc(): void {
     void manager?.addAttach(port);
   });
 
-  ipcMain.on("rail:plus-menu", (_event, rect: unknown) => {
+  ipcMain.on("host-bar:plus-menu", (_event, rect: unknown) => {
     if (!win || win.isDestroyed()) return;
-    const r = rect as { x: number; y: number; width: number; height: number };
+    const plusRect = rect as { x: number; y: number; width: number; height: number };
     const menu = Menu.buildFromTemplate([
       { label: "New Host", click: () => void manager?.newSpawn() },
       {
         label: "Add Host at port…",
-        click: () => win?.webContents.send("rail:begin-port-entry"),
+        click: () => win?.webContents.send("host-bar:begin-port-entry"),
       },
     ]);
-    menu.popup({ window: win, x: Math.round(r.x), y: Math.round(r.y + r.height + 4) });
+    menu.popup({
+      window: win,
+      x: Math.round(plusRect.x),
+      y: Math.round(plusRect.y + plusRect.height + 4),
+    });
   });
 }
 
@@ -98,7 +97,7 @@ function onReady(): void {
   manager = new HostManager({
     barFile: path.join(app.getPath("userData"), "host-bar.json"),
     onChanged: (state) => {
-      if (win && !win.isDestroyed()) win.webContents.send("rail:changed", state);
+      if (win && !win.isDestroyed()) win.webContents.send("host-bar:changed", state);
     },
     createView: createHostView,
     views,
@@ -124,16 +123,15 @@ function onReady(): void {
 
   // Quit kills every Spawned Host (item 6). The children are visible here the
   // moment they exist (spawnHostUntilUrl.onChild), so a quit during the URL
-  // wait still kills them (prototype issue #4).
+  // wait still kills them (prototype issue #4). The SIGTERM grace default
+  // (5000 ms, then SIGKILL) lives in terminateAll.
   app.on("before-quit", (event) => {
     isQuitting = true;
     const children = manager?.children() ?? [];
     if (children.length === 0) return;
     event.preventDefault();
     log(`quitting: terminating ${children.length} spawned Host(s)`);
-    void terminateAll(children, { graceMs: QUIT_KILL_GRACE_MS }).finally(() =>
-      app.exit(0)
-    );
+    void terminateAll(children).finally(() => app.exit(0));
   });
 
   void manager.bootstrap();
