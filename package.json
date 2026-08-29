@@ -9,9 +9,11 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-host-bar-assets.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "package": "electron-packager . --platform=darwin --arch=arm64 --out=release --overwrite",
     "start": "electron ."
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
     "@types/node": "^22.18.0",
     "electron": "^38.2.0",
     "typescript": "^5.9.0",

@@ -55,7 +55,7 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     backgroundColor: "#1e1f22",
     webPreferences: {
-      preload: path.join(__dirname, "host-bar-preload.js"),
+      preload: path.join(__dirname, "..", "preload", "host-bar-preload.js"),
     },
   });
   void win.loadFile(path.join(__dirname, "..", "host-bar", "host-bar.html"));

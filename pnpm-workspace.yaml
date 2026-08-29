@@ -1,3 +1,6 @@
 allowBuilds:
   electron: true
   esbuild: true
+# @electron/packager (via flora-colossus) resolves lazy requires with literal
+# node_modules/<name> path checks, so it needs an npm-style flat layout.
+nodeLinker: hoisted
