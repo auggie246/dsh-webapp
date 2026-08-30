@@ -1,0 +1,49 @@
+appId: ai.deepseek.dsh.desktop
+productName: DSH Desktop
+executableName: dsh-desktop
+electronVersion: 44.0.0
+artifactName: dsh-desktop-${version}-${os}-${arch}.${ext}
+directories:
+  output: release
+files:
+  - dist/main/**
+  - dist/preload/**
+  - dist/shared/**/*.js
+  - dist/host-bar/**
+  - assets/**
+  - package.json
+  - '!dist/**/*.test.js'
+asar: true
+mac:
+  target:
+    - target: dmg
+      arch: [x64]
+  icon: assets/icon.icns
+  identity: null
+  category: public.app-category.developer-tools
+dmg:
+  sign: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  icon: assets/icon.ico
+  forceCodeSigning: false
+nsis:
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DSH Desktop
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  icon: assets/icon.png
+  category: Development
+  maintainer: DSH Desktop contributors

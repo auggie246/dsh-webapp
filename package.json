@@ -1,21 +1,26 @@
 {
   "name": "dsh-desktop",
   "productName": "DSH Desktop",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "author": "DSH Desktop contributors",
   "description": "Desktop shell for the DeepSeek Harness (DSH) web GUI: window, attach-or-spawn, Host bar, hide-to-bar, quit-kills-host.",
   "main": "dist/main/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-host-bar-assets.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "package": "electron-packager . --platform=darwin --arch=arm64 --out=release --overwrite",
+    "package:mac": "pnpm run build && node scripts/assert-package-inputs.js && electron-builder --mac --x64 --publish never",
+    "package:win": "pnpm run build && node scripts/assert-package-inputs.js && electron-builder --win --x64 --publish never",
+    "package:linux": "pnpm run build && node scripts/assert-package-inputs.js && electron-builder --linux --x64 --publish never",
+    "smoke:native": "node scripts/native-package-smoke.js",
     "start": "electron ."
   },
   "devDependencies": {
-    "@electron/packager": "^20.3.0",
     "@types/node": "^22.18.0",
-    "electron": "^38.2.0",
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
   }

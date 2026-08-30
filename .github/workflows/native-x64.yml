@@ -1,0 +1,128 @@
+name: native-x64
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+concurrency:
+  group: native-x64-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      latest-host: ${{ steps.host.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - id: host
+        run: echo "version=$(pnpm view @deepseek-ai/dsh@latest version)" >> "$GITHUB_OUTPUT"
+      - name: Validate release tag
+        if: github.ref_type == 'tag'
+        run: |
+          test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+          node -e "if (!/^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(process.env.GITHUB_REF_NAME)) process.exit(1)"
+
+  build-smoke:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            platform: mac
+            package-script: package:mac
+          - os: windows-2022
+            platform: win
+            package-script: package:win
+          - os: ubuntu-22.04
+            platform: linux
+            package-script: package:linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm run ${{ matrix.package-script }}
+      - name: Install Linux smoke dependencies
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Smoke every native package
+        run: node scripts/native-package-smoke.js --release release --host-version "${{ needs.prepare.outputs.latest-host }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.platform }}-x64
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.zip
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+
+  compatibility:
+    needs: [prepare, build-smoke]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-linux-x64
+          path: release
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Minimum Host compatibility
+        run: node scripts/native-package-smoke.js --release release --target appimage --host-version 0.1.1-rc.2
+      - name: Latest Host compatibility
+        run: node scripts/native-package-smoke.js --release release --target appimage --host-version "${{ needs.prepare.outputs.latest-host }}"
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: [prepare, build-smoke, compatibility]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*-x64
+          merge-multiple: true
+          path: release
+      - name: Create checksums
+        working-directory: release
+        run: |
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 5
+          find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: release/*
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release/* --draft --title "DSH Desktop ${GITHUB_REF_NAME}" \
+            ${{ contains(github.ref_name, '-') && '--prerelease' || '' }}
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false

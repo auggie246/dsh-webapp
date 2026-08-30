@@ -13,6 +13,32 @@ export interface SpawnedHost {
   port: number;
 }
 
+export interface HostSpawnCommand {
+  command: string;
+  args: string[];
+  windowsHide: boolean;
+}
+
+export function spawnHostCommand(
+  command: string,
+  args: string[],
+  platform: NodeJS.Platform = process.platform
+): HostSpawnCommand {
+  if (platform === "win32" && /\.cmd$/i.test(command)) {
+    const escaped = [`"${command.replace(/"/g, '\\"')}"`, ...args.map(quoteCmdArgument)].join(" ");
+    return {
+      command: process.env.ComSpec ?? "cmd.exe",
+      args: ["/d", "/s", "/c", escaped],
+      windowsHide: true,
+    };
+  }
+  return { command, args, windowsHide: true };
+}
+
+function quoteCmdArgument(argument: string): string {
+  return /[\s&|<>^]/.test(argument) ? `"${argument.replace(/"/g, '\\"')}"` : argument;
+}
+
 export interface SpawnHostOptions {
   /** Fail after this long without a URL line. Default 30 000 ms. */
   timeoutMs?: number;
@@ -29,9 +55,11 @@ export function spawnHostUntilUrl(
 ): Promise<SpawnedHost> {
   const timeoutMs = options.timeoutMs ?? 30_000;
   return new Promise<SpawnedHost>((resolve, reject) => {
-    const child = spawn(command, args, {
+    const spawnCommand = spawnHostCommand(command, args);
+    const child = spawn(spawnCommand.command, spawnCommand.args, {
       stdio: ["ignore", "pipe", "pipe"],
       env: options.env,
+      windowsHide: spawnCommand.windowsHide,
     });
     options.onChild?.(child);
 

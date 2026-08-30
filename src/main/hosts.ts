@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { ChildProcess } from "node:child_process";
 import type { WebContentsView } from "electron";
 import { probeHost } from "../shared/attach-probe";
+import { assessHostCompatibility } from "../shared/host-compatibility";
 import { augmentChildPath, resolveDshBinary } from "../shared/dsh-binary";
 import {
   loadHostBar,
@@ -17,6 +18,11 @@ import type { HostBarState, HostStatus } from "../shared/host-bar-protocol";
 import { spawnHostUntilUrl } from "../shared/spawn-host";
 
 export const DEFAULT_ATTACH_PORT = 3080;
+
+function incompatibleHostMessage(actual: string | undefined, minimum: string): string {
+  const received = actual ?? "an unknown version";
+  return `Host version ${received} is incompatible. DSH Desktop requires dsh ${minimum} or later.`;
+}
 
 export interface HostViewsSink {
   put(id: string, view: WebContentsView, visible: boolean): void;
@@ -42,6 +48,8 @@ interface HostRecord {
 export class HostManager {
   private records = new Map<string, HostRecord>();
   private activeId: string | null = null;
+  private setupMessage: string | null = null;
+  private setupId: string | null = null;
   /** Records whose start flow is in flight; guards double-starts. */
   private starting = new Set<string>();
 
@@ -57,6 +65,9 @@ export class HostManager {
         status: record.status,
         active: record.entry.id === this.activeId,
       })),
+      setup: this.setupMessage && this.setupId === this.activeId
+        ? { message: this.setupMessage }
+        : undefined,
     };
   }
 
@@ -117,6 +128,12 @@ export class HostManager {
     await this.startRecord(entry.id);
   }
 
+  retryOffline(): void {
+    for (const record of this.records.values()) {
+      if (record.status === "offline") void this.startRecord(record.entry.id);
+    }
+  }
+
   select(id: string): void {
     const record = this.records.get(id);
     if (!record) return;
@@ -151,6 +168,8 @@ export class HostManager {
     const binary = resolveDshBinary();
     if (!binary) {
       record.status = "offline";
+      this.setupMessage = "DSH Desktop needs dsh. Install it with npm install -g @deepseek-ai/dsh, then retry or choose its path.";
+      this.setupId = record.entry.id;
       this.log("no dsh binary found; set DSH_BIN to an absolute path");
       this.emit();
       return;
@@ -169,6 +188,20 @@ export class HostManager {
         }
       );
       record.child = host.child;
+      this.setupMessage = null;
+      this.setupId = null;
+      const probe = await probeHost(host.port);
+      if (!probe.ok) {
+        host.child.kill();
+        throw new Error(`Spawned Host did not answer host.describe: ${probe.reason}`);
+      }
+      const compatibility = assessHostCompatibility(probe.info.version);
+      if (!compatibility.compatible) {
+        host.child.kill();
+        this.setupMessage = incompatibleHostMessage(compatibility.actual, compatibility.minimum);
+        this.setupId = record.entry.id;
+        throw new Error(this.setupMessage);
+      }
       record.url = host.url;
       record.entry.port = host.port;
       record.status = "ready";
@@ -186,9 +219,17 @@ export class HostManager {
   private async attachRecord(record: HostRecord): Promise<void> {
     const probe = await probeHost(record.entry.port);
     if (probe.ok) {
-      record.status = "ready";
-      record.url = `http://127.0.0.1:${record.entry.port}`;
-      this.installView(record, record.url);
+      const compatibility = assessHostCompatibility(probe.info.version);
+      if (!compatibility.compatible) {
+        record.status = "offline";
+        this.setupMessage = incompatibleHostMessage(compatibility.actual, compatibility.minimum);
+        this.setupId = record.entry.id;
+        this.log(this.setupMessage);
+      } else {
+        record.status = "ready";
+        record.url = `http://127.0.0.1:${record.entry.port}`;
+        this.installView(record, record.url);
+      }
     } else {
       record.status = "offline";
       this.log(`no Host on port ${record.entry.port}: ${probe.reason}`);

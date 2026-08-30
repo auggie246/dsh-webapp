@@ -15,6 +15,8 @@ const api = {
   selectHost: (id: string): void => ipcRenderer.send("host-bar:select", id),
   plusMenu: (rect: RailRect): void => ipcRenderer.send("host-bar:plus-menu", rect),
   addHostAtPort: (port: string): void => ipcRenderer.send("host-bar:add-attach", port),
+  retryDsh: (): void => ipcRenderer.send("host-bar:retry-dsh"),
+  pickDsh: (): Promise<boolean> => ipcRenderer.invoke("host-bar:pick-dsh"),
   onHostsChanged: (callback: (state: HostBarState) => void): void => {
     ipcRenderer.on("host-bar:changed", (_event, state: HostBarState) => callback(state));
   },

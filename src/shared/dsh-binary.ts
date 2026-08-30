@@ -7,11 +7,12 @@
 // prepended to its PATH — see augmentChildPath.
 import { accessSync, constants, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, join, win32 } from "node:path";
 
 export interface ResolveDshBinaryOptions {
   env?: NodeJS.ProcessEnv;
   home?: string;
+  platform?: NodeJS.Platform;
 }
 
 export function resolveDshBinary(
@@ -19,11 +20,12 @@ export function resolveDshBinary(
 ): string | null {
   const env = options.env ?? process.env;
   const home = options.home ?? homedir();
+  const platform = options.platform ?? process.platform;
   const configured = env.DSH_BIN?.trim();
   if (configured) return configured;
-  const onPath = findOnPath(env.PATH ?? "");
+  const onPath = findOnPath(env.PATH ?? "", platform, env.PATHEXT);
   if (onPath) return onPath;
-  return findInNvm(home);
+  return platform === "win32" ? findWindowsFallback(env) : findInNvm(home);
 }
 
 function isExecutable(file: string): boolean {
@@ -35,11 +37,48 @@ function isExecutable(file: string): boolean {
   }
 }
 
-function findOnPath(pathVar: string): string | null {
-  for (const dir of pathVar.split(delimiter)) {
+export function dshExecutableNames(
+  platform: NodeJS.Platform = process.platform,
+  pathExt?: string
+): string[] {
+  if (platform !== "win32") return ["dsh"];
+  const extensions = (pathExt ?? ".CMD;.EXE;.BAT;.COM")
+    .split(";")
+    .map((extension) => extension.trim().toLowerCase())
+    .filter((extension) => /^\.[a-z0-9]+$/.test(extension));
+  const preferred = [".cmd", ".exe", ".bat", ".com"];
+  const ordered = [...preferred, ...extensions.filter((extension) => !preferred.includes(extension))];
+  return [...ordered.map((extension) => `dsh${extension}`), "dsh"];
+}
+
+function findOnPath(
+  pathVar: string,
+  platform: NodeJS.Platform,
+  pathExt?: string
+): string | null {
+  const pathDelimiter = platform === "win32" ? ";" : delimiter;
+  for (const dir of pathVar.split(pathDelimiter)) {
     if (dir === "") continue;
-    const candidate = join(dir, "dsh");
-    if (isExecutable(candidate)) return candidate;
+    for (const executableName of dshExecutableNames(platform, pathExt)) {
+      const candidate = join(dir, executableName);
+      if (isExecutable(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+function findWindowsFallback(env: NodeJS.ProcessEnv): string | null {
+  const candidates = [
+    env.APPDATA ? join(env.APPDATA, "npm") : undefined,
+    env.ProgramFiles ? join(env.ProgramFiles, "nodejs") : undefined,
+    env["ProgramFiles(x86)"] ? join(env["ProgramFiles(x86)"], "nodejs") : undefined,
+  ];
+  for (const dir of candidates) {
+    if (!dir) continue;
+    for (const executableName of dshExecutableNames("win32", env.PATHEXT)) {
+      const candidate = join(dir, executableName);
+      if (isExecutable(candidate)) return candidate;
+    }
   }
   return null;
 }
@@ -86,15 +125,17 @@ function highest(versions: string[]): string | null {
 }
 
 /**
- * The dsh launcher is a `#!/usr/bin/env node` script, so a spawned child
+ * The dsh executable is a `#!/usr/bin/env node` script, so a spawned child
  * needs the resolved bin dir on its PATH or `env node` cannot find node
  * (launchd's minimal PATH hides every nvm dir). Augment, never replace.
  */
 export function augmentChildPath(
   resolvedBinary: string,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  const binDir = join(resolvedBinary, "..");
-  const current = env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin";
-  return { ...env, PATH: `${binDir}:${current}` };
+  const isWindows = platform === "win32";
+  const binDir = isWindows ? win32.dirname(resolvedBinary) : join(resolvedBinary, "..");
+  const current = env.PATH ?? (isWindows ? "C:\\Windows\\System32;C:\\Windows" : "/usr/bin:/bin:/usr/sbin:/sbin");
+  return { ...env, PATH: `${binDir}${isWindows ? ";" : ":"}${current}` };
 }
