@@ -1,6 +1,6 @@
 # DSH Desktop
 
-The desktop shell app for the DeepSeek Harness (DSH) web GUI. It gives the GUI its own window, dock icon, menu-bar presence, and OS notifications, instead of a browser tab on localhost.
+The desktop shell app for the DeepSeek Harness (DSH) web GUI. It gives the GUI its own window, app icon, Tray presence, and OS notifications, instead of a browser tab on localhost.
 
 ## Language
 
@@ -23,3 +23,7 @@ _Avoid_: Launch (reserved for starting the app itself), run
 **Attach-or-spawn**:
 The startup rule of DSH Desktop: Attach when a Host is found; Spawn otherwise.
 _Avoid_: Find-or-launch, auto-discovery
+
+**Tray**:
+The operating-system status area that keeps DSH Desktop available while its main window is hidden.
+_Avoid_: Menu bar, system tray
