@@ -10,6 +10,12 @@
     <link rel="stylesheet" href="host-bar.css" />
   </head>
   <body>
+    <section id="setup" hidden aria-live="polite">
+      <h1>Set up dsh</h1>
+      <p id="setup-message"></p>
+      <code>npm install -g @deepseek-ai/dsh</code>
+      <div><button id="retry-dsh">Retry detection</button><button id="pick-dsh">Choose dsh path</button></div>
+    </section>
     <nav id="host-bar" aria-label="Host bar">
       <div id="hosts"></div>
       <button id="add" title="Add a Host" aria-label="Add a Host">+</button>

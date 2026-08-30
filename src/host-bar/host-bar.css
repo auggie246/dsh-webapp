@@ -16,6 +16,50 @@ body {
   font-family: system-ui, sans-serif;
 }
 
+#setup {
+  position: fixed;
+  inset: 0 0 0 68px;
+  z-index: 10;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 16px;
+  padding: 48px;
+  background: #1e1f22;
+  color: #dbdee1;
+}
+
+#setup[hidden] {
+  display: none;
+}
+
+#setup h1,
+#setup p {
+  margin: 0;
+}
+
+#setup code {
+  user-select: text;
+  padding: 10px;
+  border-radius: 6px;
+  background: #111214;
+}
+
+#setup button {
+  margin-right: 8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 9px 12px;
+  background: #5865f2;
+  color: white;
+  cursor: pointer;
+}
+
+#setup button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
 #host-bar {
   width: 68px;
   height: 100%;

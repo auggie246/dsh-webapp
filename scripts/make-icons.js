@@ -4,7 +4,9 @@
 // - assets/trayTemplate@2x.png 32×32 the same, for Retina
 // The glyph is a terminal prompt: a chevron plus an underscore cursor.
 // Rerun with: node scripts/make-icons.js
-const { mkdirSync, writeFileSync } = require("node:fs");
+const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = require("node:fs");
+const { tmpdir } = require("node:os");
+const { execFileSync } = require("node:child_process");
 const { deflateSync } = require("node:zlib");
 const path = require("node:path");
 
@@ -157,9 +159,44 @@ function renderTemplate(size) {
   return encodePng(size, size, rgba);
 }
 
+function writeIco(file) {
+  const image = renderIcon(256);
+  const header = Buffer.alloc(22);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(1, 4);
+  header[6] = 0;
+  header[7] = 0;
+  header[8] = 0;
+  header[9] = 0;
+  header.writeUInt16LE(1, 10);
+  header.writeUInt16LE(32, 12);
+  header.writeUInt32LE(image.length, 14);
+  header.writeUInt32LE(22, 18);
+  writeFileSync(file, Buffer.concat([header, image]));
+}
+
+function writeIcns(file) {
+  if (process.platform !== "darwin") return;
+  const temporary = mkdtempSync(path.join(tmpdir(), "dsh-desktop-icon-"));
+  const iconset = path.join(temporary, "DSH Desktop.iconset");
+  mkdirSync(iconset);
+  try {
+    for (const size of [16, 32, 128, 256, 512]) {
+      writeFileSync(path.join(iconset, `icon_${size}x${size}.png`), renderIcon(size));
+      writeFileSync(path.join(iconset, `icon_${size}x${size}@2x.png`), renderIcon(size * 2));
+    }
+    execFileSync("iconutil", ["-c", "icns", iconset, "-o", file]);
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
+}
+
 const outDir = path.join(__dirname, "..", "assets");
 mkdirSync(outDir, { recursive: true });
 writeFileSync(path.join(outDir, "icon.png"), renderIcon(512));
+writeIco(path.join(outDir, "icon.ico"));
+writeIcns(path.join(outDir, "icon.icns"));
 writeFileSync(path.join(outDir, "trayTemplate.png"), renderTemplate(16));
 writeFileSync(path.join(outDir, "trayTemplate@2x.png"), renderTemplate(32));
 console.log("icons written to assets/");

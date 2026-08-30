@@ -3,7 +3,7 @@
 // - Close hides to the menu bar (item 5); the app keeps running.
 // - Quit kills every Spawned Host first (item 6), then exits.
 // - A second launch focuses the running app instead of doubling Hosts.
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, WebContentsView } from "electron";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, WebContentsView } from "electron";
 import path from "node:path";
 import { HostManager } from "./hosts";
 import { createMainWindow, HostViews } from "./windows";
@@ -11,6 +11,8 @@ import { createTray } from "./tray";
 import { HostEventWatches } from "./host-event-links";
 import { showNotification, showWarning } from "./notifications";
 import { terminateAll } from "../shared/terminate-all";
+import { windowCloseAction } from "../shared/window-close-policy";
+import { smoke } from "./smoke";
 import { parsePortText } from "../shared/port";
 import {
   DEFAULT_HOTKEY,
@@ -20,6 +22,7 @@ import {
 } from "../shared/settings";
 
 const isMac = process.platform === "darwin";
+const defaultHotkeyLabel = isMac ? "Cmd+Shift+D (default)" : "Ctrl+Shift+D (default)";
 
 let win: BrowserWindow | null = null;
 let manager: HostManager | null = null;
@@ -27,6 +30,8 @@ let watches: HostEventWatches | null = null;
 let settings: AppSettings = { hotkey: DEFAULT_HOTKEY };
 let settingsFile = "";
 let isQuitting = false;
+let tray: Electron.Tray | null = null;
+let trayUsable = false;
 
 function log(...parts: unknown[]): void {
   console.log("[dsh-desktop]", ...parts);
@@ -80,7 +85,7 @@ function setHotkey(hotkey: string | null): void {
 
 /** The hotkey picker: the ticket's proposal plus two alternatives. */
 const HOTKEY_CHOICES: { label: string; value: string | null }[] = [
-  { label: "Cmd+Shift+D (default)", value: DEFAULT_HOTKEY },
+  { label: defaultHotkeyLabel, value: DEFAULT_HOTKEY },
   { label: "Ctrl+Alt+D", value: "Control+Alt+D" },
   { label: "None", value: null },
 ];
@@ -112,6 +117,20 @@ function wireIpc(): void {
 
   ipcMain.on("host-bar:new-host", () => {
     void manager?.newSpawn();
+  });
+
+  ipcMain.on("host-bar:retry-dsh", () => manager?.retryOffline());
+
+  ipcMain.handle("host-bar:pick-dsh", async () => {
+    const options: Electron.OpenDialogOptions = { title: "Choose the dsh executable", properties: ["openFile"] };
+    const picked = await (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options));
+    const binary = picked.filePaths[0];
+    if (!picked.canceled && binary) {
+      process.env.DSH_BIN = binary;
+      manager?.retryOffline();
+      return true;
+    }
+    return false;
   });
 
   ipcMain.on("host-bar:add-attach", (_event, portText: unknown) => {
@@ -146,6 +165,7 @@ function wireIpc(): void {
 }
 
 function onReady(): void {
+  smoke.write({ event: "app-ready" });
   if (isMac) {
     app.dock?.setIcon(
       nativeImage.createFromPath(path.join(app.getAppPath(), "assets", "icon.png"))
@@ -172,6 +192,7 @@ function onReady(): void {
     onChanged: (state) => {
       if (win && !win.isDestroyed()) win.webContents.send("host-bar:changed", state);
       watches?.sync(state);
+      smoke.recordReady(state, manager?.children() ?? [], () => app.quit());
     },
     createView: createHostView,
     views,
@@ -180,15 +201,21 @@ function onReady(): void {
 
   installAppMenu();
   registerHotkey();
-  createTray({ onShow: showWindow, onQuit: () => app.quit() });
+  const trayResult = createTray({ onShow: showWindow, onQuit: () => app.quit() });
+  tray = trayResult.tray;
+  trayUsable = trayResult.usable;
   wireIpc();
 
   // Close = hide (item 5). Real exits go through Cmd+Q / the tray / app.quit().
   win.on("close", (event) => {
-    if (!isQuitting) {
+    if (isQuitting) return;
+    if (windowCloseAction(trayUsable) === "hide") {
       event.preventDefault();
       win?.hide();
+      return;
     }
+    event.preventDefault();
+    app.quit();
   });
 
   app.on("activate", () => showWindow());
@@ -205,14 +232,23 @@ function onReady(): void {
     watches?.dispose();
     globalShortcut.unregisterAll();
     const children = manager?.children() ?? [];
-    if (children.length === 0) return;
+    smoke.write({ event: "quit-started", spawnedPids: children.flatMap((child) => child.pid === undefined ? [] : [child.pid]) });
+    if (children.length === 0) {
+      smoke.write({ event: "quit-complete", spawnedPids: [] });
+      return;
+    }
     event.preventDefault();
     log(`quitting: terminating ${children.length} spawned Host(s)`);
-    void terminateAll(children).finally(() => app.exit(0));
+    void terminateAll(children).finally(() => {
+      smoke.write({ event: "quit-complete", spawnedPids: children.flatMap((child) => child.pid === undefined ? [] : [child.pid]) });
+      app.exit(0);
+    });
   });
 
   void manager.bootstrap();
 }
+
+if (smoke.userData) app.setPath("userData", smoke.userData);
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {

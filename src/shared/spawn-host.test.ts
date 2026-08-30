@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { spawnHostUntilUrl } from "./spawn-host.js";
+import { spawnHostCommand, spawnHostUntilUrl } from "./spawn-host.js";
 import type { ChildProcess } from "node:child_process";
 
 const children: ChildProcess[] = [];
@@ -20,6 +20,24 @@ afterEach(() => {
     }
   }
   children.length = 0;
+});
+
+describe("spawnHostCommand", () => {
+  test("uses cmd.exe without a console for npm Windows executables", () => {
+    expect(spawnHostCommand("C:\\npm\\dsh.cmd", ["web", "--port", "0"], "win32")).toEqual({
+      command: process.env.ComSpec ?? "cmd.exe",
+      args: ["/d", "/s", "/c", '"C:\\npm\\dsh.cmd" web --port 0'],
+      windowsHide: true,
+    });
+  });
+
+  test("Spawns native executables directly", () => {
+    expect(spawnHostCommand("/bin/dsh", ["web"], "linux")).toEqual({
+      command: "/bin/dsh",
+      args: ["web"],
+      windowsHide: true,
+    });
+  });
 });
 
 describe("spawnHostUntilUrl", () => {

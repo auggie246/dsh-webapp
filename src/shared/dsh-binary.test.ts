@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveDshBinary } from "./dsh-binary.js";
+import { augmentChildPath, dshExecutableNames, resolveDshBinary } from "./dsh-binary.js";
 
 const roots: string[] = [];
 function tempRoot(): string {
@@ -45,6 +45,30 @@ function makeNvm(root: string, options: NvmOptions = {}): string {
   }
   return nvm;
 }
+
+describe("dshExecutableNames", () => {
+  test("tries npm and native Windows executables before the bare name", () => {
+    expect(dshExecutableNames("win32", ".COM;.EXE;.BAT;.CMD")).toEqual([
+      "dsh.cmd",
+      "dsh.exe",
+      "dsh.bat",
+      "dsh.com",
+      "dsh",
+    ]);
+  });
+
+  test("uses only the POSIX executable name on Unix", () => {
+    expect(dshExecutableNames("linux")).toEqual(["dsh"]);
+  });
+});
+
+describe("augmentChildPath", () => {
+  test("uses the Windows PATH delimiter and default PATH", () => {
+    expect(augmentChildPath("C:\\npm\\dsh.cmd", {}, "win32").PATH).toBe(
+      "C:\\npm;C:\\Windows\\System32;C:\\Windows"
+    );
+  });
+});
 
 describe("resolveDshBinary", () => {
   test("a configured DSH_BIN wins over everything", () => {

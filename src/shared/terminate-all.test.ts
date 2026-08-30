@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
 import { terminateAll } from "./terminate-all.js";
 
@@ -73,19 +73,36 @@ async function closed(child: ChildProcess): Promise<void> {
 }
 
 describe("terminateAll", () => {
-  test("SIGTERM is enough for children that take it", async () => {
+  test.skipIf(process.platform === "win32")("SIGTERM is enough for children that take it", async () => {
     const child = await politeChild();
     await terminateAll([child], { graceMs: 5000 });
     expect(alive(child)).toBe(false);
     expect(child.signalCode).toBe("SIGTERM");
   });
 
-  test("escalates to SIGKILL when a child ignores SIGTERM", async () => {
+  test.skipIf(process.platform === "win32")("escalates to SIGKILL when a child ignores SIGTERM", async () => {
     const child = await stubbornChild();
     await terminateAll([child], { graceMs: 200 });
     await closed(child);
     expect(alive(child)).toBe(false);
     expect(child.signalCode).toBe("SIGKILL");
+  });
+
+  test("uses Windows tree termination instead of signaling a valid child PID", async () => {
+    let onClose: (() => void) | undefined;
+    const child = {
+      pid: 42,
+      kill: vi.fn(() => true),
+      exitCode: null,
+      signalCode: null,
+      once: (_event: "close", listener: () => void) => {
+        onClose = listener;
+      },
+    };
+    const terminateWindowsTree = vi.fn(async () => onClose?.());
+    await terminateAll([child], { platform: "win32", terminateWindowsTree });
+    expect(terminateWindowsTree).toHaveBeenCalledWith(42);
+    expect(child.kill).not.toHaveBeenCalled();
   });
 
   test("resolves immediately when nothing is alive", async () => {
@@ -94,7 +111,7 @@ describe("terminateAll", () => {
     expect(Date.now() - startedAt).toBeLessThan(100);
   });
 
-  test("leaves already-dead children alone and still handles the live ones", async () => {
+  test.skipIf(process.platform === "win32")("leaves already-dead children alone and still handles the live ones", async () => {
     const dead = spawn(process.execPath, ["-e", "process.exit(0);"]);
     await closed(dead);
     const child = await politeChild();
@@ -103,7 +120,7 @@ describe("terminateAll", () => {
     expect(alive(child)).toBe(false);
   });
 
-  test("terminates many children at once", { timeout: 10_000 }, async () => {
+  test.skipIf(process.platform === "win32")("terminates many children at once", { timeout: 10_000 }, async () => {
     const many = await Promise.all([
       stubbornChild(),
       politeChild(),

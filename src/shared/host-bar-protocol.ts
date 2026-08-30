@@ -12,6 +12,11 @@ export interface HostSummary {
   active: boolean;
 }
 
+export interface HostSetupState {
+  message: string;
+}
+
 export interface HostBarState {
   hosts: HostSummary[];
+  setup?: HostSetupState;
 }

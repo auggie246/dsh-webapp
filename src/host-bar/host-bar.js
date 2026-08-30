@@ -9,6 +9,10 @@ const hostsEl = document.getElementById("hosts");
 const addEl = document.getElementById("add");
 const formEl = document.getElementById("port-entry");
 const inputEl = document.getElementById("port-input");
+const setupEl = document.getElementById("setup");
+const setupMessageEl = document.getElementById("setup-message");
+const retryDshEl = document.getElementById("retry-dsh");
+const pickDshEl = document.getElementById("pick-dsh");
 
 function initials(label) {
   const words = label.trim().split(/\s+/).filter(Boolean);
@@ -17,6 +21,9 @@ function initials(label) {
 }
 
 function render() {
+  const setup = state.setup;
+  setupEl.hidden = !setup;
+  setupMessageEl.textContent = setup?.message ?? "";
   hostsEl.textContent = "";
   for (const host of state.hosts) {
     const button = document.createElement("button");
@@ -33,6 +40,14 @@ function render() {
     hostsEl.append(button);
   }
 }
+
+retryDshEl.addEventListener("click", function () {
+  window.dshDesktop.retryDsh();
+});
+
+pickDshEl.addEventListener("click", function () {
+  void window.dshDesktop.pickDsh();
+});
 
 addEl.addEventListener("click", function (event) {
   const rect = event.currentTarget.getBoundingClientRect();
@@ -70,10 +85,12 @@ inputEl.addEventListener("keydown", function (event) {
 
 window.dshDesktop.onHostsChanged(function (next) {
   state.hosts = next.hosts;
+  state.setup = next.setup;
   render();
 });
 
 window.dshDesktop.getState().then(function (next) {
   state.hosts = next.hosts;
+  state.setup = next.setup;
   render();
 });
