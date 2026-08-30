@@ -2,13 +2,8 @@
 // JSON file in app data. Entries are (kind, port, label); anything the file
 // cannot vouch for is dropped, and a missing or corrupt file means an empty
 // bar — never a crash on launch.
-import {
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { writeJsonAtomic } from "./json-file.js";
 
 export type HostKind = "spawn" | "attach";
 
@@ -62,8 +57,5 @@ export function loadHostBar(file: string): BarEntry[] {
 }
 
 export function saveHostBar(file: string, entries: BarEntry[]): void {
-  mkdirSync(dirname(file), { recursive: true });
-  const temp = `${file}.tmp`;
-  writeFileSync(temp, `${JSON.stringify(entries, null, 2)}\n`);
-  renameSync(temp, file);
+  writeJsonAtomic(file, entries);
 }
