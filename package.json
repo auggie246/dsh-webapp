@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-host-bar-assets.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "package:mac": "pnpm run build && node scripts/assert-package-inputs.js && electron-builder --mac --x64 --publish never",
+    "package:mac": "pnpm run build && node scripts/assert-package-inputs.js && electron-builder --mac --arm64 --publish never",
     "package:win": "pnpm run build && node scripts/assert-package-inputs.js && electron-builder --win --x64 --publish never",
     "package:linux": "pnpm run build && node scripts/assert-package-inputs.js && electron-builder --linux --x64 --publish never",
     "smoke:native": "node scripts/native-package-smoke.js",
