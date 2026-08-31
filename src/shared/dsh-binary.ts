@@ -7,7 +7,7 @@
 // prepended to its PATH — see augmentChildPath.
 import { accessSync, constants, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join, win32 } from "node:path";
+import { join, win32 } from "node:path";
 
 export interface ResolveDshBinaryOptions {
   env?: NodeJS.ProcessEnv;
@@ -56,7 +56,9 @@ function findOnPath(
   platform: NodeJS.Platform,
   pathExt?: string
 ): string | null {
-  const pathDelimiter = platform === "win32" ? ";" : delimiter;
+  // POSIX PATH is always colon-separated; path.delimiter is host-specific and
+  // would be wrong when probing for a non-host platform.
+  const pathDelimiter = platform === "win32" ? ";" : ":";
   for (const dir of pathVar.split(pathDelimiter)) {
     if (dir === "") continue;
     for (const executableName of dshExecutableNames(platform, pathExt)) {

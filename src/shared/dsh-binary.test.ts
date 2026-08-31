@@ -95,7 +95,9 @@ describe("resolveDshBinary", () => {
     ).toBe(join(binDir, "dsh"));
   });
 
-  test("a non-executable PATH candidate is skipped", () => {
+  // POSIX-only: chmod exec bits are not observable on Windows, where
+  // accessSync(X_OK) degrades to an existence check.
+  test.skipIf(process.platform === "win32")("a non-executable PATH candidate is skipped", () => {
     const root = tempRoot();
     const weakDir = join(root, "weak");
     const goodDir = join(root, "good");
@@ -165,7 +167,8 @@ describe("resolveDshBinary", () => {
     );
   });
 
-  test("versions without an executable dsh are not candidates", () => {
+  // POSIX-only: same chmod exec-bit limitation as above.
+  test.skipIf(process.platform === "win32")("versions without an executable dsh are not candidates", () => {
     const root = tempRoot();
     makeNvm(root, {
       versions: ["v20.19.4", "v22.22.2"],
