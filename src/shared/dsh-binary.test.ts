@@ -78,6 +78,7 @@ describe("resolveDshBinary", () => {
       resolveDshBinary({
         env: { DSH_BIN: "/custom/dsh" },
         home: root,
+        platform: "linux",
       })
     ).toBe("/custom/dsh");
   });
@@ -90,7 +91,7 @@ describe("resolveDshBinary", () => {
     writeFileSync(join(binDir, "dsh"), "#!/bin/sh\n");
     chmodSync(join(binDir, "dsh"), 0o755);
     expect(
-      resolveDshBinary({ env: { PATH: `${binDir}:/usr/bin` }, home: root })
+      resolveDshBinary({ env: { PATH: `${binDir}:/usr/bin` }, home: root, platform: "linux" })
     ).toBe(join(binDir, "dsh"));
   });
 
@@ -118,7 +119,7 @@ describe("resolveDshBinary", () => {
       versions: ["v20.19.4", "v22.22.2"],
       defaultAlias: "22",
     });
-    expect(resolveDshBinary({ env: {}, home: root })).toBe(
+    expect(resolveDshBinary({ env: {}, home: root, platform: "linux" })).toBe(
       join(root, ".nvm", "versions", "node", "v22.22.2", "bin", "dsh")
     );
   });
@@ -129,7 +130,7 @@ describe("resolveDshBinary", () => {
       versions: ["v20.19.4", "v22.22.2", "v22.9.0"],
       defaultAlias: "v22.9.0",
     });
-    expect(resolveDshBinary({ env: {}, home: root })).toBe(
+    expect(resolveDshBinary({ env: {}, home: root, platform: "linux" })).toBe(
       join(root, ".nvm", "versions", "node", "v22.9.0", "bin", "dsh")
     );
   });
@@ -140,7 +141,7 @@ describe("resolveDshBinary", () => {
       versions: ["v20.19.4", "v22.22.2", "v22.9.0"],
       defaultAlias: "22.22",
     });
-    expect(resolveDshBinary({ env: {}, home: root })).toBe(
+    expect(resolveDshBinary({ env: {}, home: root, platform: "linux" })).toBe(
       join(root, ".nvm", "versions", "node", "v22.22.2", "bin", "dsh")
     );
   });
@@ -151,7 +152,7 @@ describe("resolveDshBinary", () => {
       versions: ["v20.19.4", "v22.22.2"],
       defaultAlias: "99",
     });
-    expect(resolveDshBinary({ env: {}, home: root })).toBe(
+    expect(resolveDshBinary({ env: {}, home: root, platform: "linux" })).toBe(
       join(root, ".nvm", "versions", "node", "v22.22.2", "bin", "dsh")
     );
   });
@@ -159,7 +160,7 @@ describe("resolveDshBinary", () => {
   test("no alias falls back to the highest version", () => {
     const root = tempRoot();
     makeNvm(root, { versions: ["v20.19.4", "v22.22.2"] });
-    expect(resolveDshBinary({ env: {}, home: root })).toBe(
+    expect(resolveDshBinary({ env: {}, home: root, platform: "linux" })).toBe(
       join(root, ".nvm", "versions", "node", "v22.22.2", "bin", "dsh")
     );
   });
@@ -170,13 +171,13 @@ describe("resolveDshBinary", () => {
       versions: ["v20.19.4", "v22.22.2"],
       withExecutableDsh: ["v20.19.4"],
     });
-    expect(resolveDshBinary({ env: {}, home: root })).toBe(
+    expect(resolveDshBinary({ env: {}, home: root, platform: "linux" })).toBe(
       join(root, ".nvm", "versions", "node", "v20.19.4", "bin", "dsh")
     );
   });
 
   test("returns null when nothing resolves", () => {
     const root = tempRoot();
-    expect(resolveDshBinary({ env: { PATH: "/usr/bin" }, home: root })).toBeNull();
+    expect(resolveDshBinary({ env: { PATH: "/usr/bin" }, home: root, platform: "linux" })).toBeNull();
   });
 });
