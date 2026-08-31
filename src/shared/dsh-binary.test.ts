@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { augmentChildPath, dshExecutableNames, resolveDshBinary } from "./dsh-binary.js";
 
 const roots: string[] = [];
@@ -90,8 +90,10 @@ describe("resolveDshBinary", () => {
     mkdirSync(binDir);
     writeFileSync(join(binDir, "dsh"), "#!/bin/sh\n");
     chmodSync(join(binDir, "dsh"), 0o755);
+    // Probe with the host platform and delimiter: simulating POSIX PATH
+    // splitting on a Windows host shreds the drive-letter colon in `C:\...`.
     expect(
-      resolveDshBinary({ env: { PATH: `${binDir}:/usr/bin` }, home: root, platform: "linux" })
+      resolveDshBinary({ env: { PATH: [binDir, "/usr/bin"].join(delimiter) }, home: root })
     ).toBe(join(binDir, "dsh"));
   });
 
