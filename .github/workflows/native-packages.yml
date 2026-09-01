@@ -66,8 +66,11 @@ jobs:
       - name: Install Linux smoke dependencies
         if: matrix.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: Smoke every native package
+      - name: Smoke every native package with latest dsh
         run: node scripts/native-package-smoke.js --release release --host-version "${{ needs.prepare.outputs.latest-host }}"
+      - name: Smoke every native package with minimum supported dsh
+        if: needs.prepare.outputs.latest-host != '0.1.1-rc.2'
+        run: node scripts/native-package-smoke.js --release release --host-version 0.1.1-rc.2
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.platform }}-${{ matrix.arch }}
@@ -79,28 +82,9 @@ jobs:
             release/*.deb
           if-no-files-found: error
 
-  compatibility:
-    needs: [prepare, build-smoke]
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          package-manager-cache: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: package-linux-x64
-          path: release
-      - run: sudo apt-get update && sudo apt-get install -y xvfb
-      - name: Minimum Host compatibility
-        run: node scripts/native-package-smoke.js --release release --target appimage --host-version 0.1.1-rc.2
-      - name: Latest Host compatibility
-        run: node scripts/native-package-smoke.js --release release --target appimage --host-version "${{ needs.prepare.outputs.latest-host }}"
-
   publish:
     if: github.ref_type == 'tag'
-    needs: [prepare, build-smoke, compatibility]
+    needs: [prepare, build-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
