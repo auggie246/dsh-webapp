@@ -69,7 +69,12 @@ function installTestHost(version) {
   mkdirSync(prefix, { recursive: true });
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   const install = spawnCommand(npm, ["install", "--no-audit", "--no-fund", "--prefix", prefix, `@deepseek-ai/dsh@${version}`]);
-  execFileSync(install.command, install.args, { stdio: "inherit", windowsHide: true });
+  const nodeOptions = [process.env.NODE_OPTIONS, "--max-old-space-size=4096"].filter(Boolean).join(" ");
+  execFileSync(install.command, install.args, {
+    env: { ...process.env, NODE_OPTIONS: nodeOptions },
+    stdio: "inherit",
+    windowsHide: true,
+  });
   const executable = path.join(prefix, "node_modules", ".bin", process.platform === "win32" ? "dsh.cmd" : "dsh");
   if (!existsSync(executable)) fail(`installed dsh launcher is missing: ${executable}`);
   return executable;
@@ -188,8 +193,7 @@ function startDsh(executable) {
 
 function spawnCommand(executable, args) {
   if (process.platform === "win32" && executable.toLowerCase().endsWith(".cmd")) {
-    const text = [`"${executable}"`, ...args].join(" ");
-    return { command: process.env.ComSpec ?? "cmd.exe", args: ["/d", "/s", "/c", text] };
+    return { command: process.env.ComSpec ?? "cmd.exe", args: ["/d", "/s", "/c", "call", executable, ...args] };
   }
   return { command: executable, args };
 }
