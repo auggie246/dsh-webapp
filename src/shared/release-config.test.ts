@@ -46,6 +46,7 @@ describe("release configuration", () => {
     expect(workflow).toContain("pattern: package-*");
     expect(workflow).not.toContain("pattern: package-*-x64");
     expect(workflow).toContain("actions/attest-build-provenance@v3");
+    expect(workflow).toContain("GH_REPO: ${{ github.repository }}");
     expect(workflow).toContain("gh release create");
     expect(workflow).toContain("gh release edit");
     expect(workflow).toContain("Smoke every native package with latest dsh");
