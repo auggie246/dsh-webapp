@@ -5,6 +5,7 @@ const { execFileSync, spawn } = require("node:child_process");
 const { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const path = require("node:path");
+const { expandZipWithPowerShell } = require("./windows-archive.js");
 
 const root = path.join(__dirname, "..");
 const options = parseArgs(process.argv.slice(2));
@@ -121,7 +122,7 @@ function prepareNsis(artifact) {
 function prepareZip(artifact) {
   const unpack = path.join(work, `zip-${Date.now()}`);
   mkdirSync(unpack);
-  execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force", artifact, unpack], { stdio: "inherit", windowsHide: true });
+  expandZipWithPowerShell(artifact, unpack);
   const executable = findNamedFile(unpack, "dsh-desktop.exe");
   if (!executable) fail(`ZIP contains no dsh-desktop.exe: ${artifact}`);
   return { command: executable, args: [], env: {}, label: "ZIP" };
