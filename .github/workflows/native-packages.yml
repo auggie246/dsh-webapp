@@ -24,6 +24,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          package-manager-cache: false
       - id: host
         run: echo "version=$(pnpm view @deepseek-ai/dsh@latest version)" >> "$GITHUB_OUTPUT"
       - name: Validate release tag
@@ -86,6 +87,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          package-manager-cache: false
       - uses: actions/download-artifact@v4
         with:
           name: package-linux-x64
