@@ -72,3 +72,7 @@ Run the checks before you submit a change:
 pnpm test
 pnpm typecheck
 ```
+
+## License
+
+[MIT](LICENSE)
