@@ -5,7 +5,7 @@ DSH Desktop must own a window, app icon, and Tray presence; send OS notification
 ## Consequences
 
 - Install size around 100 MB, versus around 10 MB for Tauri.
-- Release targets follow ADR-0004; the shell supports macOS, Windows, and Linux on x64.
+- Release targets follow ADR-0004: macOS arm64, Windows x64, and Linux x64.
 
 ## Considered Options
 
