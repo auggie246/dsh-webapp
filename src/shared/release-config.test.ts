@@ -13,7 +13,8 @@ const workflow = readFileSync(join(root, ".github", "workflows", "native-package
 
 describe("release configuration", () => {
   test("pins Electron and packages Apple silicon macOS plus x64 Windows and Linux", () => {
-    expect(packageJson.devDependencies.electron).toBe("44.0.0");
+    expect(packageJson.devDependencies.electron).toBe("44.1.0");
+    expect(builder).toContain("electronVersion: 44.1.0");
     expect(packageJson.devDependencies["@electron/packager"]).toBeUndefined();
     for (const script of ["package:mac", "package:win", "package:linux"]) {
       expect(packageJson.scripts[script]).toContain("electron-builder");
@@ -42,6 +43,8 @@ describe("release configuration", () => {
     expect(workflow).toContain("SHA256SUMS");
     expect(workflow).toContain("actions/upload-artifact@v7");
     expect(workflow).toContain("actions/download-artifact@v8");
+    expect(workflow).toContain("pattern: package-*");
+    expect(workflow).not.toContain("pattern: package-*-x64");
     expect(workflow).toContain("actions/attest-build-provenance@v3");
     expect(workflow).toContain("gh release create");
     expect(workflow).toContain("gh release edit");

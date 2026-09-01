@@ -1,7 +1,7 @@
 appId: ai.deepseek.dsh.desktop
 productName: DSH Desktop
 executableName: dsh-desktop
-electronVersion: 44.0.0
+electronVersion: 44.1.0
 artifactName: dsh-desktop-${version}-${os}-${arch}.${ext}
 directories:
   output: release
