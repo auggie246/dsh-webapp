@@ -71,7 +71,7 @@ jobs:
       - name: Smoke every native package with minimum supported dsh
         if: needs.prepare.outputs.latest-host != '0.1.1-rc.2'
         run: node scripts/native-package-smoke.js --release release --host-version 0.1.1-rc.2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: package-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -91,7 +91,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: package-*-x64
           merge-multiple: true
