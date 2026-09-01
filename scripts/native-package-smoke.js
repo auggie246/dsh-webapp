@@ -68,7 +68,8 @@ function installTestHost(version) {
   const prefix = path.join(work, "installed-test-dsh");
   mkdirSync(prefix, { recursive: true });
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-  execFileSync(npm, ["install", "--no-audit", "--no-fund", "--prefix", prefix, `@deepseek-ai/dsh@${version}`], { stdio: "inherit", windowsHide: true });
+  const install = spawnCommand(npm, ["install", "--no-audit", "--no-fund", "--prefix", prefix, `@deepseek-ai/dsh@${version}`]);
+  execFileSync(install.command, install.args, { stdio: "inherit", windowsHide: true });
   const executable = path.join(prefix, "node_modules", ".bin", process.platform === "win32" ? "dsh.cmd" : "dsh");
   if (!existsSync(executable)) fail(`installed dsh launcher is missing: ${executable}`);
   return executable;
