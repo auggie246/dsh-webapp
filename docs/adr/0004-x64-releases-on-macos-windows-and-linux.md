@@ -11,7 +11,7 @@ DSH Desktop will publish native x64 packages for macOS, Windows, and Linux. We c
 - Package smoke tests cover launch, Spawn, Attach, and Spawned Host cleanup. One platform failure prevents the whole release.
 - Prerelease tags create GitHub prereleases.
 - Users install `dsh` separately. Missing `dsh` opens setup guidance, retry, and an explicit path picker.
-- DSH Desktop rejects Hosts older than its recorded minimum. The first minimum is `0.1.1-rc.2`; CI tests that minimum and the latest published `dsh`.
+- DSH Desktop rejects Host compatibility versions older than `0.0.1`. CI separately tests `dsh` package version `0.1.1-rc.2` and latest.
 - Window close hides to the Tray. On Linux, it quits when DSH Desktop cannot provide a usable Tray.
 - Signing and automatic updates move to an undecided v0.4 milestone.
 

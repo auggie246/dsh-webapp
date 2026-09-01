@@ -1,4 +1,4 @@
-export const MINIMUM_HOST_VERSION = "0.1.1-rc.2";
+export const MINIMUM_HOST_COMPATIBILITY_VERSION = "0.0.1";
 
 export type HostCompatibility =
   | { compatible: true; minimum: string }
@@ -14,11 +14,11 @@ interface ParsedVersion {
 export function assessHostCompatibility(version: string | undefined): HostCompatibility {
   const actual = version?.trim() || undefined;
   const parsedActual = actual && parseVersion(actual);
-  const parsedMinimum = parseVersion(MINIMUM_HOST_VERSION);
+  const parsedMinimum = parseVersion(MINIMUM_HOST_COMPATIBILITY_VERSION);
   if (!parsedActual || !parsedMinimum || compareVersions(parsedActual, parsedMinimum) < 0) {
-    return { compatible: false, minimum: MINIMUM_HOST_VERSION, actual };
+    return { compatible: false, minimum: MINIMUM_HOST_COMPATIBILITY_VERSION, actual };
   }
-  return { compatible: true, minimum: MINIMUM_HOST_VERSION };
+  return { compatible: true, minimum: MINIMUM_HOST_COMPATIBILITY_VERSION };
 }
 
 function parseVersion(version: string): ParsedVersion | null {

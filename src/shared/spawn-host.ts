@@ -25,18 +25,13 @@ export function spawnHostCommand(
   platform: NodeJS.Platform = process.platform
 ): HostSpawnCommand {
   if (platform === "win32" && /\.cmd$/i.test(command)) {
-    const escaped = [`"${command.replace(/"/g, '\\"')}"`, ...args.map(quoteCmdArgument)].join(" ");
     return {
       command: process.env.ComSpec ?? "cmd.exe",
-      args: ["/d", "/s", "/c", escaped],
+      args: ["/d", "/s", "/c", "call", command, ...args],
       windowsHide: true,
     };
   }
   return { command, args, windowsHide: true };
-}
-
-function quoteCmdArgument(argument: string): string {
-  return /[\s&|<>^]/.test(argument) ? `"${argument.replace(/"/g, '\\"')}"` : argument;
 }
 
 export interface SpawnHostOptions {

@@ -21,7 +21,7 @@ export const DEFAULT_ATTACH_PORT = 3080;
 
 function incompatibleHostMessage(actual: string | undefined, minimum: string): string {
   const received = actual ?? "an unknown version";
-  return `Host version ${received} is incompatible. DSH Desktop requires dsh ${minimum} or later.`;
+  return `Host compatibility version ${received} is incompatible. DSH Desktop requires ${minimum} or later.`;
 }
 
 export interface HostViewsSink {

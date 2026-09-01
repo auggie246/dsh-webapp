@@ -77,6 +77,12 @@ function installTestHost(version) {
   });
   const executable = path.join(prefix, "node_modules", ".bin", process.platform === "win32" ? "dsh.cmd" : "dsh");
   if (!existsSync(executable)) fail(`installed dsh launcher is missing: ${executable}`);
+  const versionCommand = spawnCommand(executable, ["--version"]);
+  const installedVersion = execFileSync(versionCommand.command, versionCommand.args, {
+    encoding: "utf8",
+    windowsHide: true,
+  }).trim();
+  if (installedVersion !== version) fail(`installed dsh reports ${installedVersion}, expected ${version}`);
   return executable;
 }
 
@@ -154,14 +160,11 @@ async function runScenario(app, dsh, kind) {
     const parsed = readSmokeEvents(events);
     const ready = parsed.find((event) => event.event === "host-ready");
     if (!ready?.port) fail(`${app.label} ${kind} did not record a Host port`);
-    const describe = await waitForDescribe(ready.port, 5_000);
-    if (describe?.result?.value?.version !== hostVersion) {
-      fail(`${app.label} ${kind} reported ${describe?.result?.value?.version}, expected ${hostVersion}`);
-    }
     if (kind === "spawn") {
       await waitForPortState(ready.port, false, 15_000);
       if (ready.pid) await waitForPidExit(ready.pid, 15_000);
     } else {
+      await waitForDescribe(ready.port, 5_000);
       await waitForPortState(ready.port, true, 5_000);
     }
     console.log(`✓ ${app.label} ${kind}`);

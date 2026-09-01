@@ -8,6 +8,10 @@ The desktop shell app for the DeepSeek Harness (DSH) web GUI. It gives the GUI i
 One running `dsh` process that serves the web GUI and its API on a loopback port.
 _Avoid_: Server, backend, daemon, instance
 
+**Host compatibility version**:
+One semantic version that a Host reports to DSH Desktop. It differs from the installed `dsh` package version.
+_Avoid_: `dsh` version, package version
+
 **Host bar**:
 The Discord-style rail in DSH Desktop that lists every Host the app manages. A "+" control adds a Host.
 _Avoid_: Server bar, session switcher, instance switcher

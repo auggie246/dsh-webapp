@@ -23,10 +23,10 @@ afterEach(() => {
 });
 
 describe("spawnHostCommand", () => {
-  test("uses cmd.exe without a console for npm Windows executables", () => {
-    expect(spawnHostCommand("C:\\npm\\dsh.cmd", ["web", "--port", "0"], "win32")).toEqual({
+  test("uses cmd.exe call without a console for npm Windows executables", () => {
+    expect(spawnHostCommand("C:\\Program Files\\npm\\dsh.cmd", ["web", "--port", "0"], "win32")).toEqual({
       command: process.env.ComSpec ?? "cmd.exe",
-      args: ["/d", "/s", "/c", '"C:\\npm\\dsh.cmd" web --port 0'],
+      args: ["/d", "/s", "/c", "call", "C:\\Program Files\\npm\\dsh.cmd", "web", "--port", "0"],
       windowsHide: true,
     });
   });
