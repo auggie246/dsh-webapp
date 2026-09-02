@@ -30,6 +30,14 @@ export class HostViews {
     }
   }
 
+  /** Drop a Host's view (Remove); its page state is discarded. */
+  remove(id: string): void {
+    const view = this.views.get(id);
+    if (!view) return;
+    this.views.delete(id);
+    this.win.contentView.removeChildView(view);
+  }
+
   layout(): void {
     for (const view of this.views.values()) this.place(view);
   }

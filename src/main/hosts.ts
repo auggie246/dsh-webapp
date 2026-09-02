@@ -16,6 +16,7 @@ import {
 } from "../shared/host-bar-store";
 import type { HostBarState, HostStatus } from "../shared/host-bar-protocol";
 import { spawnHostUntilUrl } from "../shared/spawn-host";
+import { terminateAll } from "../shared/terminate-all";
 
 export const DEFAULT_ATTACH_PORT = 3080;
 
@@ -27,6 +28,7 @@ function incompatibleHostMessage(actual: string | undefined, minimum: string): s
 export interface HostViewsSink {
   put(id: string, view: WebContentsView, visible: boolean): void;
   show(id: string | null): void;
+  remove(id: string): void;
 }
 
 export interface HostManagerDeps {
@@ -128,6 +130,45 @@ export class HostManager {
     await this.startRecord(entry.id);
   }
 
+  /** Right-click → Remove: forget a Host; a Spawned Host's process is stopped. */
+  remove(id: string): void {
+    const record = this.records.get(id);
+    if (!record) return;
+    // Gone from the registry first, so a start still in flight aborts (the
+    // gone() guards) instead of reinstalling a view for a removed Host.
+    this.records.delete(id);
+    this.deps.views.remove(id);
+    if (this.setupId === id) {
+      this.setupMessage = null;
+      this.setupId = null;
+    }
+    if (this.activeId === id) {
+      this.activeId = null;
+      const nextId = [...this.records.keys()][0] ?? null;
+      if (nextId !== null) {
+        this.select(nextId);
+      } else {
+        this.deps.views.show(null);
+      }
+    }
+    this.persist();
+    this.emit();
+    const child = record.child;
+    if (child && child.exitCode === null && child.signalCode === null) {
+      // A Spawned Host belongs to this app; Remove stops it with the same
+      // SIGTERM ladder quit uses. An attached Host keeps running.
+      this.log(`removing ${record.entry.label}: stopping its dsh process`);
+      void terminateAll([child]);
+    }
+  }
+
+  /** The registry's view of one Host, for main to build menus from. */
+  describe(id: string): { label: string; kind: BarEntry["kind"] } | null {
+    const record = this.records.get(id);
+    if (!record) return null;
+    return { label: record.entry.label, kind: record.entry.kind };
+  }
+
   retryOffline(): void {
     for (const record of this.records.values()) {
       if (record.status === "offline") void this.startRecord(record.entry.id);
@@ -164,6 +205,11 @@ export class HostManager {
     }
   }
 
+  /** True once the record left the registry (Remove) — a start must abort. */
+  private gone(record: HostRecord): boolean {
+    return this.records.get(record.entry.id) !== record;
+  }
+
   private async spawnRecord(record: HostRecord): Promise<void> {
     const binary = resolveDshBinary();
     if (!binary) {
@@ -188,9 +234,17 @@ export class HostManager {
         }
       );
       record.child = host.child;
+      if (this.gone(record)) {
+        host.child.kill();
+        return;
+      }
       this.setupMessage = null;
       this.setupId = null;
       const probe = await probeHost(host.port);
+      if (this.gone(record)) {
+        host.child.kill();
+        return;
+      }
       if (!probe.ok) {
         host.child.kill();
         throw new Error(`Spawned Host did not answer host.describe: ${probe.reason}`);
@@ -218,6 +272,7 @@ export class HostManager {
 
   private async attachRecord(record: HostRecord): Promise<void> {
     const probe = await probeHost(record.entry.port);
+    if (this.gone(record)) return;
     if (probe.ok) {
       const compatibility = assessHostCompatibility(probe.info.version);
       if (!compatibility.compatible) {
@@ -240,8 +295,8 @@ export class HostManager {
   private watchChild(record: HostRecord, child: ChildProcess): void {
     child.once("close", () => {
       // Only the current child of this record may mark it offline; a stale
-      // child from a previous retry must not.
-      if (record.child === child && record.status === "ready") {
+      // child from a previous retry must not, nor may a removed record.
+      if (!this.gone(record) && record.child === child && record.status === "ready") {
         record.status = "offline";
         this.emit();
       }

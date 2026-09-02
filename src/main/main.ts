@@ -115,6 +115,34 @@ function wireIpc(): void {
     if (typeof id === "string") manager?.select(id);
   });
 
+  ipcMain.on("host-bar:host-context-menu", (_event, payload: unknown) => {
+    if (!win || win.isDestroyed()) return;
+    if (typeof payload !== "object" || payload === null) return;
+    const id = (payload as { id?: unknown }).id;
+    const rect = (payload as { rect?: { x?: unknown; y?: unknown; width?: unknown; height?: unknown } }).rect;
+    if (typeof id !== "string" || !rect) return;
+    const host = manager?.describe(id);
+    if (!host) return;
+    const menu = Menu.buildFromTemplate([
+      { label: host.label, enabled: false },
+      { type: "separator" },
+      {
+        // Say what Remove does: Spawned means this app stops the process,
+        // attached means the external Host simply keeps running.
+        label:
+          host.kind === "spawn"
+            ? `Remove ${host.label} (stops its dsh)`
+            : `Remove ${host.label} (detaches)`,
+        click: () => manager?.remove(id),
+      },
+    ]);
+    menu.popup({
+      window: win,
+      x: Math.round(Number(rect.x)),
+      y: Math.round(Number(rect.y) + Number(rect.height) + 4),
+    });
+  });
+
   ipcMain.on("host-bar:new-host", () => {
     void manager?.newSpawn();
   });

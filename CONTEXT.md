@@ -24,6 +24,10 @@ _Avoid_: Connect, bind
 Start a new Host as a child process of DSH Desktop.
 _Avoid_: Launch (reserved for starting the app itself), run
 
+**Remove**:
+Forget a Host from the Host bar. A Spawned Host's process is stopped with the quit's termination ladder; an attached Host keeps running and is only detached.
+_Avoid_: Delete, kill, close
+
 **Attach-or-spawn**:
 The startup rule of DSH Desktop: Attach when a Host is found; Spawn otherwise.
 _Avoid_: Find-or-launch, auto-discovery

@@ -39,7 +39,7 @@ If DSH Desktop cannot find `dsh`, its setup screen can retry detection or use an
 
 ## Features
 
-- Manage several Hosts from one Host bar.
+- Manage several Hosts from one Host bar; right-click a Host to Remove it (a Spawned Host's process is stopped).
 - Open the window with `Cmd+Shift+D` on macOS or `Ctrl+Shift+D` elsewhere by default.
 - Keep DSH Desktop available after closing its window when the operating system provides a usable Tray.
 - Receive notifications for Host events.

@@ -13,6 +13,8 @@ export interface RailRect {
 const api = {
   getState: (): Promise<HostBarState> => ipcRenderer.invoke("host-bar:get-state"),
   selectHost: (id: string): void => ipcRenderer.send("host-bar:select", id),
+  hostContextMenu: (id: string, rect: RailRect): void =>
+    ipcRenderer.send("host-bar:host-context-menu", { id, rect }),
   plusMenu: (rect: RailRect): void => ipcRenderer.send("host-bar:plus-menu", rect),
   addHostAtPort: (port: string): void => ipcRenderer.send("host-bar:add-attach", port),
   retryDsh: (): void => ipcRenderer.send("host-bar:retry-dsh"),

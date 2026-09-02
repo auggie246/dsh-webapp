@@ -28,7 +28,7 @@ function render() {
   for (const host of state.hosts) {
     const button = document.createElement("button");
     button.className = "host " + host.status + (host.active ? " active" : "");
-    button.title = host.label + " · 127.0.0.1:" + host.port + " · " + host.status;
+    button.title = host.label + " · 127.0.0.1:" + host.port + " · " + host.status + " · right-click to remove";
     const disc = document.createElement("span");
     disc.textContent = initials(host.label);
     const dot = document.createElement("span");
@@ -36,6 +36,11 @@ function render() {
     button.append(disc, dot);
     button.addEventListener("click", function () {
       window.dshDesktop.selectHost(host.id);
+    });
+    button.addEventListener("contextmenu", function (event) {
+      event.preventDefault();
+      const rect = event.currentTarget.getBoundingClientRect();
+      window.dshDesktop.hostContextMenu(host.id, rect);
     });
     hostsEl.append(button);
   }
