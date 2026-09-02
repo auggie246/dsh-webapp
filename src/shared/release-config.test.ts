@@ -25,6 +25,9 @@ describe("release configuration", () => {
     expect(builder).toContain("target: zip");
     expect(builder).toContain("target: AppImage");
     expect(builder).toContain("target: deb");
+    expect(builder).toContain("target: pacman");
+    expect(builder).toContain("artifactName: dsh-desktop-${version}-${arch}.pkg.tar.zst");
+    expect(builder).toContain("compression: zstd");
     expect(builder).toContain("arch: [arm64]");
     expect(packageJson.scripts["package:mac"]).toContain("--arm64");
     expect(packageJson.scripts["package:win"]).toContain("--x64");
@@ -38,6 +41,7 @@ describe("release configuration", () => {
     expect(workflow).toContain("arch: arm64");
     expect(workflow).toContain("windows-2022");
     expect(workflow).toContain("ubuntu-22.04");
+    expect(workflow).toContain("release/*.pkg.tar.zst");
     expect(workflow).toContain("needs: [prepare, build-smoke]");
     expect(workflow).not.toContain("\n  compatibility:");
     expect(workflow).toContain("SHA256SUMS");

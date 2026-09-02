@@ -44,6 +44,11 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
+    - target: pacman
+      arch: [x64]
   icon: assets/icon.png
   category: Development
   maintainer: DSH Desktop contributors
+pacman:
+  artifactName: dsh-desktop-${version}-${arch}.pkg.tar.zst
+  compression: zstd

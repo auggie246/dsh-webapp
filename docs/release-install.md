@@ -24,6 +24,14 @@ Then select Run anyway.
 
 Do this only when you downloaded the package from the DSH Desktop GitHub Release.
 
+## Arch Linux
+
+Download the `.pkg.tar.zst` file from the GitHub Release, then install it with pacman:
+
+```sh
+sudo pacman -U ./dsh-desktop-*-x86_64.pkg.tar.zst
+```
+
 ## Verify the download
 
 Each release provides `SHA256SUMS`.

@@ -54,9 +54,9 @@ function parseArgs(args) {
 
 function discoverArtifacts(directory, requestedTarget) {
   const targetExtensions = {
-    dmg: ".dmg", nsis: ".exe", zip: ".zip", appimage: ".appimage", deb: ".deb",
+    dmg: ".dmg", nsis: ".exe", zip: ".zip", appimage: ".appimage", deb: ".deb", pacman: ".pkg.tar.zst",
   };
-  const platformTargets = process.platform === "darwin" ? ["dmg"] : process.platform === "win32" ? ["nsis", "zip"] : ["appimage", "deb"];
+  const platformTargets = process.platform === "darwin" ? ["dmg"] : process.platform === "win32" ? ["nsis", "zip"] : ["appimage", "deb", "pacman"];
   const targets = requestedTarget ? [requestedTarget.toLowerCase()] : platformTargets;
   for (const target of targets) if (!targetExtensions[target]) fail(`unsupported --target: ${target}`);
   return readdirSync(directory)
@@ -97,6 +97,7 @@ function preparePackage(artifact) {
     return { command: "xvfb-run", args: ["-a", artifact], env: { APPIMAGE_EXTRACT_AND_RUN: "1" }, label: "AppImage" };
   }
   if (lower.endsWith(".deb")) return prepareDeb(artifact);
+  if (lower.endsWith(".pkg.tar.zst")) return preparePacman(artifact);
   fail(`unsupported package: ${artifact}`);
 }
 
@@ -132,6 +133,15 @@ function prepareDeb(artifact) {
   execFileSync("sudo", ["apt-get", "install", "-y", artifact], { stdio: "inherit" });
   cleanups.push(() => execFileSync("sudo", ["apt-get", "remove", "-y", "dsh-desktop"], { stdio: "inherit" }));
   return { command: "xvfb-run", args: ["-a", "/usr/bin/dsh-desktop"], env: {}, label: "DEB" };
+}
+
+function preparePacman(artifact) {
+  const unpack = path.join(work, `pacman-${Date.now()}`);
+  mkdirSync(unpack);
+  execFileSync("tar", ["--extract", "--file", artifact, "--directory", unpack], { stdio: "inherit" });
+  const executable = findNamedFile(path.join(unpack, "opt"), "dsh-desktop");
+  if (!executable) fail(`Arch package contains no dsh-desktop executable: ${artifact}`);
+  return { command: "xvfb-run", args: ["-a", executable], env: {}, label: "Pacman" };
 }
 
 async function runScenario(app, dsh, kind) {
