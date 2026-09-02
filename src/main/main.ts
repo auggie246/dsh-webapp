@@ -81,6 +81,7 @@ function setHotkey(hotkey: string | null): void {
   }
   registerHotkey();
   installAppMenu();
+  installTrayMenu();
 }
 
 /** The hotkey picker: the ticket's proposal plus two alternatives. */
@@ -90,22 +91,39 @@ const HOTKEY_CHOICES: { label: string; value: string | null }[] = [
   { label: "None", value: null },
 ];
 
+/** The Global Hotkey radio group, shared by the app menu and the tray menu. */
+function hotkeyMenuItems(): Electron.MenuItemConstructorOptions[] {
+  return HOTKEY_CHOICES.map((choice) => ({
+    label: choice.label,
+    type: "radio" as const,
+    checked: settings.hotkey === choice.value,
+    click: () => setHotkey(choice.value),
+  }));
+}
+
 function installAppMenu(): void {
-  const hotkeyMenu: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: "Global Hotkey",
-      submenu: HOTKEY_CHOICES.map((choice) => ({
-        label: choice.label,
-        type: "radio" as const,
-        checked: settings.hotkey === choice.value,
-        click: () => setHotkey(choice.value),
-      })),
-    },
-  ];
   const template: Electron.MenuItemConstructorOptions[] = isMac
-    ? [{ role: "appMenu" }, ...hotkeyMenu, { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" }]
-    : [...hotkeyMenu, { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" }];
+    ? [{ role: "appMenu" }, { label: "Global Hotkey", submenu: hotkeyMenuItems() }, { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" }]
+    : [{ label: "Global Hotkey", submenu: hotkeyMenuItems() }, { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" }];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+/** Tray menu: with the app menu bar auto-hidden, this is the always-visible way in. */
+function trayMenuItems(): Electron.MenuItemConstructorOptions[] {
+  return [
+    { label: "Show DSH Desktop", click: showWindow },
+    { type: "separator" },
+    ...hotkeyMenuItems(),
+    { type: "separator" },
+    { label: "Quit DSH Desktop", click: () => app.quit() },
+  ];
+}
+
+function installTrayMenu(): void {
+  // On macOS the tray keeps left-click = show and pops a fresh menu on
+  // right-click (tray.ts), so there is no persistent menu to refresh.
+  if (isMac) return;
+  tray?.setContextMenu(Menu.buildFromTemplate(trayMenuItems()));
 }
 
 function wireIpc(): void {
@@ -229,9 +247,13 @@ function onReady(): void {
 
   installAppMenu();
   registerHotkey();
-  const trayResult = createTray({ onShow: showWindow, onQuit: () => app.quit() });
+  const trayResult = createTray({
+    onShow: showWindow,
+    buildMenu: () => Menu.buildFromTemplate(trayMenuItems()),
+  });
   tray = trayResult.tray;
   trayUsable = trayResult.usable;
+  installTrayMenu();
   wireIpc();
 
   // Close = hide (item 5). Real exits go through Cmd+Q / the tray / app.quit().

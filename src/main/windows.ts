@@ -62,6 +62,9 @@ export function createMainWindow(): BrowserWindow {
     title: "DSH Desktop",
     show: false,
     backgroundColor: "#1e1f22",
+    // The menu row (Global Hotkey, Edit, View, …) stays out of the way until
+    // Alt calls it up. macOS is unaffected: its menu bar is the system's.
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "host-bar-preload.js"),
     },
