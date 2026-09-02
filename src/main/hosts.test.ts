@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   probeHost: vi.fn(),
   resolveDshBinary: vi.fn(),
   spawnHostUntilUrl: vi.fn(),
+  terminateAll: vi.fn(),
 }));
 
 vi.mock("../shared/attach-probe", () => ({ probeHost: mocks.probeHost }));
@@ -20,6 +21,7 @@ vi.mock("../shared/dsh-binary", () => ({
   augmentChildPath: () => "/usr/bin:/bin",
 }));
 vi.mock("../shared/spawn-host", () => ({ spawnHostUntilUrl: mocks.spawnHostUntilUrl }));
+vi.mock("../shared/terminate-all", () => ({ terminateAll: mocks.terminateAll }));
 
 import { HostManager } from "./hosts.js";
 import { loadHostBar } from "../shared/host-bar-store.js";
@@ -119,7 +121,9 @@ describe("HostManager remove", () => {
 
     harness.manager.remove(id);
     expect(harness.views.remove).toHaveBeenCalledWith(id);
-    expect(child.killCalls).toContain("SIGTERM");
+    // How the process is stopped is the ladder's business (terminate-all
+    // tests, platform-specific); here we assert Remove hands it the child.
+    expect(mocks.terminateAll).toHaveBeenCalledWith([child]);
     expect(latest(harness).hosts).toEqual([]);
     expect(loadHostBar(harness.barFile)).toEqual([]);
   });
@@ -133,6 +137,7 @@ describe("HostManager remove", () => {
 
     harness.manager.remove(id);
     expect(harness.views.remove).toHaveBeenCalledWith(id);
+    expect(mocks.terminateAll).not.toHaveBeenCalled();
     expect(child.killCalls).toEqual([]);
     expect(latest(harness).hosts).toEqual([]);
   });
