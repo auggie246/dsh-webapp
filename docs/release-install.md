@@ -29,7 +29,7 @@ Do this only when you downloaded the package from the DSH Desktop GitHub Release
 Download the `.pkg.tar.zst` file from the GitHub Release, then install it with pacman:
 
 ```sh
-sudo pacman -U ./dsh-desktop-*-x86_64.pkg.tar.zst
+sudo pacman -U ./dsh-desktop-*.pkg.tar.zst
 ```
 
 ## Verify the download
