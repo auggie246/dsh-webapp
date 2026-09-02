@@ -55,8 +55,10 @@ describe("release configuration", () => {
     expect(workflow).not.toContain("pattern: package-*-x64");
     expect(workflow).toContain("actions/attest-build-provenance@v3");
     expect(workflow).toContain("GH_REPO: ${{ github.repository }}");
-    // The tag's release is GitHub's; the workflow only uploads (clobbers) assets.
-    expect(workflow).toContain('gh release upload "${GITHUB_REF_NAME}" release/* --clobber');
+    // The workflow itself creates the release from the tag and attaches the
+    // artifacts before publishing it.
+    expect(workflow).toContain("gh release create");
+    expect(workflow).toContain("gh release edit");
     expect(workflow).toContain("Smoke every native package with latest dsh");
     expect(workflow).toContain("Smoke every native package with minimum supported dsh");
     expect(workflow).toContain("--host-version 0.1.1-rc.2");
