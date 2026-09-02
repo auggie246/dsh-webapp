@@ -28,6 +28,10 @@ describe("release configuration", () => {
     expect(builder).toContain("target: pacman");
     expect(builder).toContain("artifactName: dsh-desktop-${version}-${arch}.pkg.tar.zst");
     expect(builder).toContain("compression: zstd");
+    expect(builder).toContain("    - gtk3");
+    expect(builder).toContain("    - nss");
+    expect(builder).not.toContain("http-parser");
+    expect(builder).not.toContain("libappindicator-gtk3");
     expect(builder).toContain("arch: [arm64]");
     expect(packageJson.scripts["package:mac"]).toContain("--arm64");
     expect(packageJson.scripts["package:win"]).toContain("--x64");
