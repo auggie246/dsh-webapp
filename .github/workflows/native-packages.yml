@@ -40,14 +40,26 @@ jobs:
             platform: mac
             arch: arm64
             package-script: package:mac
+            electron-cache-paths: |
+              ~/Library/Caches/electron
+              ~/Library/Caches/electron-builder
+            npm-cache-path: ~/.npm
           - os: windows-2022
             platform: win
             arch: x64
             package-script: package:win
+            electron-cache-paths: |
+              ~/AppData/Local/electron/Cache
+              ~/AppData/Local/electron-builder/Cache
+            npm-cache-path: ~/AppData/Local/npm-cache
           - os: ubuntu-22.04
             platform: linux
             arch: x64
             package-script: package:linux
+            electron-cache-paths: |
+              ~/.cache/electron
+              ~/.cache/electron-builder
+            npm-cache-path: ~/.npm
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -56,6 +68,20 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Cache Electron and electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.electron-cache-paths }}
+          key: ${{ runner.os }}-electron-${{ hashFiles('pnpm-lock.yaml', 'electron-builder.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+      - name: Cache smoke-test npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.npm-cache-path }}
+          key: ${{ runner.os }}-smoke-npm-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-smoke-npm-
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm typecheck
