@@ -66,6 +66,7 @@ function registerHotkey(): void {
 function createHostView(url: string): WebContentsView {
   const view = new WebContentsView({ webPreferences: { sandbox: true } });
   view.setBackgroundColor("#1e1f22");
+  view.webContents.once("did-finish-load", () => smoke.recordHostPageLoaded(() => app.quit()));
   void view.webContents.loadURL(url).catch((error: unknown) => {
     log("Host page failed to load:", url, error);
   });

@@ -9,7 +9,7 @@ const events = readFileSync(file, "utf8")
   .filter(Boolean)
   .map((line) => JSON.parse(line));
 const names = events.map((event) => event.event);
-for (const event of ["app-ready", "host-ready", "quit-started", "quit-complete"]) {
+for (const event of ["app-ready", "host-ready", "host-page-loaded", "quit-started", "quit-complete"]) {
   if (!names.includes(event)) throw new Error(`missing smoke event: ${event}`);
 }
 if (expectedKind) {

@@ -3,7 +3,7 @@ import type { ChildProcess } from "node:child_process";
 import type { HostBarState } from "../shared/host-bar-protocol";
 
 export interface SmokeEvent {
-  event: "app-ready" | "host-ready" | "quit-started" | "quit-complete";
+  event: "app-ready" | "host-ready" | "host-page-loaded" | "quit-started" | "quit-complete";
   kind?: "spawn" | "attach";
   port?: number;
   pid?: number;
@@ -12,6 +12,8 @@ export interface SmokeEvent {
 
 const file = process.env.DSH_DESKTOP_SMOKE_FILE;
 let hostReadyRecorded = false;
+let hostPageLoadedRecorded = false;
+let autoQuitScheduled = false;
 
 export const smoke = {
   active: file !== undefined,
@@ -28,6 +30,17 @@ export const smoke = {
     hostReadyRecorded = true;
     const child = ready.kind === "spawn" ? children[0] : undefined;
     this.write({ event: "host-ready", kind: ready.kind, port: ready.port, pid: child?.pid });
-    if (this.autoQuit) queueMicrotask(quit);
+    this.maybeAutoQuit(quit);
+  },
+  recordHostPageLoaded(quit: () => void): void {
+    if (!this.active || hostPageLoadedRecorded) return;
+    hostPageLoadedRecorded = true;
+    this.write({ event: "host-page-loaded" });
+    this.maybeAutoQuit(quit);
+  },
+  maybeAutoQuit(quit: () => void): void {
+    if (!this.autoQuit || !hostReadyRecorded || !hostPageLoadedRecorded || autoQuitScheduled) return;
+    autoQuitScheduled = true;
+    queueMicrotask(quit);
   },
 };
