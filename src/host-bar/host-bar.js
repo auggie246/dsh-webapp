@@ -40,7 +40,13 @@ function render() {
     button.addEventListener("contextmenu", function (event) {
       event.preventDefault();
       const rect = event.currentTarget.getBoundingClientRect();
-      window.dshDesktop.hostContextMenu(host.id, rect);
+      // DOMRect loses its non-enumerable values through IPC. Send a plain RailRect.
+      window.dshDesktop.hostContextMenu(host.id, {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      });
     });
     hostsEl.append(button);
   }

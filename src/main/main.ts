@@ -139,6 +139,10 @@ function wireIpc(): void {
     const id = (payload as { id?: unknown }).id;
     const rect = (payload as { rect?: { x?: unknown; y?: unknown; width?: unknown; height?: unknown } }).rect;
     if (typeof id !== "string" || !rect) return;
+    const x = Number(rect.x);
+    const y = Number(rect.y);
+    const height = Number(rect.height);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(height)) return;
     const host = manager?.describe(id);
     if (!host) return;
     const menu = Menu.buildFromTemplate([
@@ -156,8 +160,8 @@ function wireIpc(): void {
     ]);
     menu.popup({
       window: win,
-      x: Math.round(Number(rect.x)),
-      y: Math.round(Number(rect.y) + Number(rect.height) + 4),
+      x: Math.round(x),
+      y: Math.round(y + height + 4),
     });
   });
 
