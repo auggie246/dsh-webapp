@@ -19,26 +19,32 @@ The product and package are named `dsh-desktop`; the repository keeps its workin
 
 ## Table of Contents
 
+- [Security](#security)
 - [Install](#install)
 - [Usage](#usage)
 - [Features](#features)
-- [Unsigned package warnings](#unsigned-package-warnings)
 - [Support](#support)
 - [Maintainers](#maintainers)
 - [Contributing](#contributing)
 - [License](#license)
 
+## Security
+
+macOS Gatekeeper and Windows SmartScreen can warn about the unsigned packages.
+
+Follow the [safe installation and checksum instructions](docs/release-install.md) before you override either warning.
+
 ## Install
 
-### 1. Install `dsh`
+### Dependencies
 
-DSH Desktop uses the separately published [`@deepseek-ai/dsh`](https://www.npmjs.com/package/@deepseek-ai/dsh) package.
+DSH Desktop uses the separately published [`@deepseek-ai/dsh`](https://www.npmjs.com/package/@deepseek-ai/dsh) package. Install it globally:
 
 ```sh
 npm install -g @deepseek-ai/dsh
 ```
 
-### 2. Download DSH Desktop
+### 1. Download DSH Desktop
 
 Download the package for your platform from [GitHub Releases](https://github.com/auggie246/dsh-webapp/releases).
 
@@ -48,7 +54,7 @@ Download the package for your platform from [GitHub Releases](https://github.com
 | Windows x64 | Installer (`.exe`) or portable ZIP |
 | Linux x64 | AppImage or Debian package (`.deb`) |
 
-### 3. Open DSH Desktop
+### 2. Open DSH Desktop
 
 DSH Desktop uses attach-or-spawn. It attaches to an existing Host, or spawns one with the installed `dsh`.
 
@@ -77,12 +83,6 @@ dsh web
 - Receive notifications for Host events.
 - Terminate every spawned Host when DSH Desktop quits.
 
-## Unsigned package warnings
-
-macOS Gatekeeper and Windows SmartScreen can warn about the unsigned packages.
-
-Follow the [safe installation and checksum instructions](docs/release-install.md) before you override either warning.
-
 ## Support
 
 [Report problems through GitHub Issues](https://github.com/auggie246/dsh-webapp/issues).
@@ -94,6 +94,8 @@ Include your platform, downloaded package name, and `dsh --version` output.
 [@auggie246](https://github.com/auggie246)
 
 ## Contributing
+
+[Open an issue](https://github.com/auggie246/dsh-webapp/issues) to ask questions or report problems. PRs are accepted.
 
 Development requires Node.js 22 and pnpm 11.7.0.
 
@@ -108,6 +110,8 @@ Run the checks before you submit a change:
 pnpm test
 pnpm typecheck
 ```
+
+If you edit this README, keep it conformant to the [Standard Readme](https://github.com/RichardLitt/standard-readme) specification.
 
 ## License
 
