@@ -17,6 +17,7 @@ import {
 import type { HostBarState, HostStatus } from "../shared/host-bar-protocol";
 import { spawnHostUntilUrl } from "../shared/spawn-host";
 import { terminateAll } from "../shared/terminate-all";
+import { hostWebUrl } from "../shared/url-line";
 
 export const DEFAULT_ATTACH_PORT = 3080;
 
@@ -45,6 +46,12 @@ interface HostRecord {
   child?: ChildProcess;
   url?: string;
   view?: WebContentsView;
+  /** The Host's launch token (issue #8); never exposed to the renderer. */
+  token?: string;
+  /** Whether the Host serves the authenticated 0.1.2-class API (issue #8). */
+  modern?: boolean;
+  /** Why a Host is offline; surfaced as its bar note (issue #8). */
+  note?: string;
 }
 
 export class HostManager {
@@ -66,6 +73,9 @@ export class HostManager {
         port: record.entry.port,
         status: record.status,
         active: record.entry.id === this.activeId,
+        ...(record.status === "offline" && record.note !== undefined
+          ? { note: record.note }
+          : {}),
       })),
       setup: this.setupMessage && this.setupId === this.activeId
         ? { message: this.setupMessage }
@@ -115,13 +125,14 @@ export class HostManager {
     await this.startRecord(entry.id);
   }
 
-  /** "+" → Add Host at port…: Attach to a user-typed port. */
-  async addAttach(port: number): Promise<void> {
+  /** "+" → Add Host at port… (or paste the Host's authenticated URL): Attach. */
+  async addAttach(port: number, token?: string): Promise<void> {
     const entry: BarEntry = {
       id: randomUUID(),
       kind: "attach",
       port,
       label: this.nextLabel(),
+      ...(token === undefined ? {} : { token }),
     };
     this.records.set(entry.id, { entry, status: "starting" });
     this.persist();
@@ -167,6 +178,19 @@ export class HostManager {
     const record = this.records.get(id);
     if (!record) return null;
     return { label: record.entry.label, kind: record.entry.kind };
+  }
+
+  /**
+   * The Host's launch token, for the main-process event sockets (issue #8);
+   * undefined for a legacy tokenless Host. Never leaves the main process.
+   */
+  tokenOf(id: string): string | undefined {
+    return this.records.get(id)?.token;
+  }
+
+  /** Whether the Host serves the authenticated 0.1.2-class API (issue #8). */
+  isModern(id: string): boolean {
+    return this.records.get(id)?.modern === true;
   }
 
   retryOffline(): void {
@@ -240,7 +264,7 @@ export class HostManager {
       }
       this.setupMessage = null;
       this.setupId = null;
-      const probe = await probeHost(host.port);
+      const probe = await probeHost(host.port, { token: host.token });
       if (this.gone(record)) {
         host.child.kill();
         return;
@@ -249,7 +273,7 @@ export class HostManager {
         host.child.kill();
         throw new Error(`Spawned Host did not answer host.describe: ${probe.reason}`);
       }
-      const compatibility = assessHostCompatibility(probe.info.version);
+      const compatibility = assessHostCompatibility(probe.info.version, probe.info.modern === true);
       if (!compatibility.compatible) {
         host.child.kill();
         this.setupMessage = incompatibleHostMessage(compatibility.actual, compatibility.minimum);
@@ -258,35 +282,51 @@ export class HostManager {
       }
       record.url = host.url;
       record.entry.port = host.port;
+      record.token = host.token;
+      record.modern = probe.info.modern === true;
       record.status = "ready";
+      record.note = undefined;
       this.persist();
       this.installView(record, host.url);
       this.emit();
       this.watchChild(record, host.child);
     } catch (error) {
       record.status = "offline";
-      this.log("spawn failed:", error instanceof Error ? error.message : error);
+      record.note = error instanceof Error ? error.message : String(error);
+      this.log("spawn failed:", record.note);
       this.emit();
     }
   }
 
   private async attachRecord(record: HostRecord): Promise<void> {
-    const probe = await probeHost(record.entry.port);
+    const probe = await probeHost(record.entry.port, { token: record.entry.token });
     if (this.gone(record)) return;
     if (probe.ok) {
-      const compatibility = assessHostCompatibility(probe.info.version);
+      const compatibility = assessHostCompatibility(probe.info.version, probe.info.modern === true);
       if (!compatibility.compatible) {
         record.status = "offline";
-        this.setupMessage = incompatibleHostMessage(compatibility.actual, compatibility.minimum);
+        record.note = incompatibleHostMessage(compatibility.actual, compatibility.minimum);
+        this.setupMessage = record.note;
         this.setupId = record.entry.id;
-        this.log(this.setupMessage);
+        this.log(record.note);
       } else {
         record.status = "ready";
-        record.url = `http://127.0.0.1:${record.entry.port}`;
+        record.note = undefined;
+        record.token = record.entry.token;
+        record.modern = probe.info.modern === true;
+        record.url = hostWebUrl(record.entry.port, record.entry.token);
         this.installView(record, record.url);
       }
+    } else if (probe.authRequired) {
+      // The Host answers but guards its API with the launch token printed in
+      // its `dsh web:` line (issue #8). Without that URL there is nothing to
+      // attach with; the user re-adds the Host from the printed URL.
+      record.status = "offline";
+      record.note = `needs its authenticated URL: the Host on port ${record.entry.port} requires the token printed by dsh web`;
+      this.log(`Host on port ${record.entry.port} requires authentication; re-add it with the URL printed by dsh web`);
     } else {
       record.status = "offline";
+      record.note = probe.reason;
       this.log(`no Host on port ${record.entry.port}: ${probe.reason}`);
     }
     this.emit();
@@ -298,6 +338,7 @@ export class HostManager {
       // child from a previous retry must not, nor may a removed record.
       if (!this.gone(record) && record.child === child && record.status === "ready") {
         record.status = "offline";
+        record.note = "its dsh process exited";
         this.emit();
       }
     });
@@ -315,6 +356,11 @@ export class HostManager {
     const probe = await probeHost(DEFAULT_ATTACH_PORT);
     if (probe.ok) {
       return { id: randomUUID(), kind: "attach", port: DEFAULT_ATTACH_PORT, label };
+    }
+    // An authenticating Host is not attachable without the launch token only
+    // its own process knows (issue #8) — Spawn gives the app its own URL line.
+    if (!probe.authRequired) {
+      this.log(`no Host on port ${DEFAULT_ATTACH_PORT}: ${probe.reason}`);
     }
     return { id: randomUUID(), kind: "spawn", port: 0, label };
   }

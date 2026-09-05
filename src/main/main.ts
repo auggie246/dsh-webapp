@@ -13,7 +13,7 @@ import { showNotification, showWarning } from "./notifications";
 import { terminateAll } from "../shared/terminate-all";
 import { windowCloseAction } from "../shared/window-close-policy";
 import { smoke } from "./smoke";
-import { parsePortText } from "../shared/port";
+import { parseAttachInput } from "../shared/port";
 import {
   DEFAULT_HOTKEY,
   loadSettings,
@@ -184,17 +184,17 @@ function wireIpc(): void {
     return false;
   });
 
-  ipcMain.on("host-bar:add-attach", (_event, portText: unknown) => {
-    if (typeof portText !== "string") {
-      log("ignored an invalid port:", portText);
+  ipcMain.on("host-bar:add-attach", (_event, text: unknown) => {
+    if (typeof text !== "string") {
+      log("ignored an invalid attach input:", text);
       return;
     }
-    const port = parsePortText(portText);
-    if (port === null) {
-      log("ignored an invalid port:", portText);
+    const input = parseAttachInput(text);
+    if (input === null) {
+      log("ignored an invalid attach input:", text);
       return;
     }
-    void manager?.addAttach(port);
+    void manager?.addAttach(input.port, input.token);
   });
 
   ipcMain.on("host-bar:plus-menu", (_event, rect: unknown) => {
@@ -203,7 +203,7 @@ function wireIpc(): void {
     const menu = Menu.buildFromTemplate([
       { label: "New Host", click: () => void manager?.newSpawn() },
       {
-        label: "Add Host at port…",
+        label: "Add Host at port or URL…",
         click: () => win?.webContents.send("host-bar:begin-port-entry"),
       },
     ]);
@@ -237,6 +237,12 @@ function onReady(): void {
         manager?.select(hostId);
       });
     },
+    // The event sockets need the Host's launch token to mint their session
+    // cookie (issue #8); the token never leaves the main process.
+    tokenFor: (hostId) => manager?.tokenOf(hostId),
+    // A 0.1.2-class Host moved its event streams to the remote.mux protocol;
+    // the watches stay off for it until that port lands (issue #8).
+    modernFor: (hostId) => manager?.isModern(hostId) ?? false,
   });
   manager = new HostManager({
     barFile: path.join(app.getPath("userData"), "host-bar.json"),

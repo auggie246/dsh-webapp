@@ -10,6 +10,8 @@ export interface HostSummary {
   port: number;
   status: HostStatus;
   active: boolean;
+  /** Why an offline Host is offline (issue #8), e.g. it needs its authenticated URL. */
+  note?: string;
 }
 
 export interface HostSetupState {

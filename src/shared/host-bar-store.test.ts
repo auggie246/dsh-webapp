@@ -81,6 +81,35 @@ describe("Host bar store", () => {
     expect(loadHostBar(file)).toEqual([]);
   });
 
+  test("an Attach entry keeps its launch token (issue #8)", () => {
+    const file = join(tempDir(), "host-bar.json");
+    const entry = { id: "a-1", kind: "attach", port: 4077, label: "Host 1", token: "s3cret-token" } as const;
+    saveHostBar(file, [entry]);
+    expect(loadHostBar(file)).toEqual([entry]);
+  });
+
+  test("a Spawn entry never keeps a token — each launch mints a fresh one", () => {
+    const file = join(tempDir(), "host-bar.json");
+    writeFileSync(
+      file,
+      JSON.stringify([{ id: "s-1", kind: "spawn", port: 0, label: "Host 1", token: "stale" }])
+    );
+    expect(loadHostBar(file)).toEqual([{ id: "s-1", kind: "spawn", port: 0, label: "Host 1" }]);
+  });
+
+  test("drops blank, non-string, and absurdly long tokens from Attach entries", () => {
+    const file = join(tempDir(), "host-bar.json");
+    const blank = { id: "a-1", kind: "attach", port: 4077, label: "Blank", token: "   " };
+    const notAToken = { id: "a-2", kind: "attach", port: 4078, label: "Number", token: 42 };
+    const tooLong = { id: "a-3", kind: "attach", port: 4079, label: "Long", token: "x".repeat(513) };
+    writeFileSync(file, JSON.stringify([blank, notAToken, tooLong]));
+    expect(loadHostBar(file)).toEqual([
+      { id: "a-1", kind: "attach", port: 4077, label: "Blank" },
+      { id: "a-2", kind: "attach", port: 4078, label: "Number" },
+      { id: "a-3", kind: "attach", port: 4079, label: "Long" },
+    ]);
+  });
+
   test("save overwrites the previous bar", () => {
     const file = join(tempDir(), "host-bar.json");
     saveHostBar(file, [ENTRY]);

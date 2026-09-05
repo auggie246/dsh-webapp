@@ -16,7 +16,8 @@ const api = {
   hostContextMenu: (id: string, rect: RailRect): void =>
     ipcRenderer.send("host-bar:host-context-menu", { id, rect }),
   plusMenu: (rect: RailRect): void => ipcRenderer.send("host-bar:plus-menu", rect),
-  addHostAtPort: (port: string): void => ipcRenderer.send("host-bar:add-attach", port),
+  /** A bare port, the Host's authenticated URL, or its whole `dsh web:` line. */
+  addAttach: (text: string): void => ipcRenderer.send("host-bar:add-attach", text),
   retryDsh: (): void => ipcRenderer.send("host-bar:retry-dsh"),
   pickDsh: (): Promise<boolean> => ipcRenderer.invoke("host-bar:pick-dsh"),
   onHostsChanged: (callback: (state: HostBarState) => void): void => {

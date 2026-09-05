@@ -11,8 +11,15 @@ interface ParsedVersion {
   prerelease: string[];
 }
 
-export function assessHostCompatibility(version: string | undefined): HostCompatibility {
+export function assessHostCompatibility(
+  version: string | undefined,
+  modern = false
+): HostCompatibility {
   const actual = version?.trim() || undefined;
+  // A Host that answers an authenticated 0.1.2-class RPC but reports no
+  // version is modern by construction (issue #8): the remote API it served
+  // did not exist before authentication shipped.
+  if (modern) return { compatible: true, minimum: MINIMUM_HOST_COMPATIBILITY_VERSION };
   const parsedActual = actual && parseVersion(actual);
   const parsedMinimum = parseVersion(MINIMUM_HOST_COMPATIBILITY_VERSION);
   if (!parsedActual || !parsedMinimum || compareVersions(parsedActual, parsedMinimum) < 0) {

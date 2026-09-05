@@ -4,8 +4,16 @@
 // Reconnects run on exponential backoff (500 ms doubling to 8 s, reset on
 // open). Router state lives per Host and survives reconnects, so the mux's
 // reconnect replay of pending approval/question frames does not re-notify.
+//
+// Since DSH 0.1.2-rc.1 (issue #8) the upgrade handshake needs the Host's
+// session cookie: each connect first mints it by trading the Host's launch
+// token for the cookie (the same exchange the page performs), then opens the
+// socket with that Cookie header — Node's own WebSocket cannot send one, so
+// the opener uses `ws`. Legacy tokenless Hosts connect exactly as before.
+import { WebSocket as NodeWebSocket } from "ws";
 import { frameStream, type EventStream } from "../shared/event-frame.js";
 import { parseEventEnvelope } from "../shared/event-frame.js";
+import { sessionCookieForToken } from "../shared/attach-probe.js";
 import {
   HostEventRouter,
   type NotificationIntent,
@@ -19,17 +27,41 @@ const EVENT_PATHS: { path: string; stream: EventStream }[] = [
 const RETRY_BASE_MS = 500;
 const RETRY_MAX_MS = 8000;
 
+/** The one slice of a WebSocket client this module drives. */
+export interface EventSocket {
+  addEventListener(type: "open", listener: () => void): void;
+  addEventListener(type: "message", listener: (event: { data: unknown }) => void): void;
+  addEventListener(type: "close" | "error", listener: () => void): void;
+  close(): void;
+}
+
+/** Opens one socket; `cookie` carries the Host's minted session. */
+export type SocketOpener = (url: string, cookie?: string) => EventSocket;
+
+function wsSocketOpener(url: string, cookie?: string): EventSocket {
+  return new NodeWebSocket(url, {
+    ...(cookie === undefined ? {} : { headers: { cookie } }),
+  });
+}
+
 export interface HostEventWatchesDeps {
   log?(...parts: unknown[]): void;
   onIntent(hostId: string, intent: NotificationIntent): void;
+  /** The Host's launch token, when the app knows one (issue #8). */
+  tokenFor?(hostId: string): string | undefined;
+  /** Whether the Host serves the authenticated 0.1.2-class API (issue #8). */
+  modernFor?(hostId: string): boolean;
+  /** Socket construction; defaults to `ws` with the session cookie header. */
+  openSocket?: SocketOpener;
 }
 
 interface Link {
   hostId: string;
   label: string;
   port: number;
+  token?: string;
   router: HostEventRouter;
-  sockets: WebSocket[];
+  sockets: EventSocket[];
   retryTimer: NodeJS.Timeout | null;
   retryDelay: number;
   stopped: boolean;
@@ -37,6 +69,8 @@ interface Link {
 
 export class HostEventWatches {
   private links = new Map<string, Link>();
+  /** Hosts already told about the deferred modern-event port (issue #8). */
+  private readonly modernNoticed = new Set<string>();
 
   constructor(private readonly deps: HostEventWatchesDeps) {}
 
@@ -48,13 +82,31 @@ export class HostEventWatches {
     const live = new Set<string>();
     for (const host of state.hosts) {
       if (host.status !== "ready" || host.port === 0) continue;
+      // A 0.1.2-class Host no longer serves /api/events.*: its forwarded
+      // events moved to the remote.mux protocol (issue #8). Opening the old
+      // paths would only spam retries, so modern Hosts get no link until
+      // that port lands — logged once so the silence is explained.
+      if (this.deps.modernFor?.(host.id) === true) {
+        const existing = this.links.get(host.id);
+        if (existing) {
+          this.closeLink(existing);
+          this.links.delete(host.id);
+        }
+        if (!this.modernNoticed.has(host.id)) {
+          this.modernNoticed.add(host.id);
+          this.deps.log?.(
+            `events: ${host.label} speaks the 0.1.2 remote API; notifications wait for the remote.mux port (issue #8)`
+          );
+        }
+        continue;
+      }
       live.add(host.id);
       const existing = this.links.get(host.id);
       if (existing) {
         if (existing.port === host.port && existing.label === host.label) continue;
         this.closeLink(existing);
       }
-      this.openLink(host.id, host.label, host.port);
+      this.openLink(host.id, host.label, host.port, this.deps.tokenFor?.(host.id));
     }
     for (const [id, link] of this.links) {
       if (!live.has(id)) {
@@ -69,11 +121,12 @@ export class HostEventWatches {
     this.links.clear();
   }
 
-  private openLink(hostId: string, label: string, port: number): void {
+  private openLink(hostId: string, label: string, port: number, token?: string): void {
     const link: Link = {
       hostId,
       label,
       port,
+      ...(token === undefined ? {} : { token }),
       router: new HostEventRouter({ hostLabel: label }),
       sockets: [],
       retryTimer: null,
@@ -87,9 +140,36 @@ export class HostEventWatches {
 
   private connect(link: Link, eventPath: { path: string; stream: EventStream }): void {
     if (link.stopped) return;
-    let socket: WebSocket;
+    void this.openSocket(link, eventPath);
+  }
+
+  private async openSocket(
+    link: Link,
+    eventPath: { path: string; stream: EventStream }
+  ): Promise<void> {
+    let cookie: string | undefined;
+    if (link.token !== undefined) {
+      try {
+        const minted = await sessionCookieForToken(link.port, link.token);
+        if (minted.unauthorized || minted.cookie === undefined) {
+          this.deps.log?.(`events: ${link.label} did not accept its token`);
+          this.scheduleRetry(link, eventPath);
+          return;
+        }
+        cookie = minted.cookie;
+      } catch (error) {
+        this.deps.log?.("events: session exchange failed:", error);
+        this.scheduleRetry(link, eventPath);
+        return;
+      }
+    }
+    if (link.stopped) return;
+    let socket: EventSocket;
     try {
-      socket = new WebSocket(`ws://127.0.0.1:${link.port}${eventPath.path}`);
+      socket = (this.deps.openSocket ?? wsSocketOpener)(
+        `ws://127.0.0.1:${link.port}${eventPath.path}`,
+        cookie
+      );
     } catch (error) {
       this.deps.log?.("events: socket construction failed:", error);
       this.scheduleRetry(link, eventPath);

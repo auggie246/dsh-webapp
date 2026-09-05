@@ -28,7 +28,12 @@ function render() {
   for (const host of state.hosts) {
     const button = document.createElement("button");
     button.className = "host " + host.status + (host.active ? " active" : "");
-    button.title = host.label + " · 127.0.0.1:" + host.port + " · " + host.status + " · right-click to remove";
+    button.title =
+      host.label +
+      " · 127.0.0.1:" + host.port +
+      " · " + host.status +
+      (host.note ? " · " + host.note : "") +
+      " · right-click to remove";
     const disc = document.createElement("span");
     disc.textContent = initials(host.label);
     const dot = document.createElement("span");
@@ -76,12 +81,20 @@ window.dshDesktop.onBeginPortEntry(function () {
   inputEl.focus();
 });
 
+// Attach accepts a bare port, or the authenticated URL (or whole `dsh web:`
+// line) an 0.1.2-rc.1 Host prints (issue #8). Main parses strictly; this
+// check only separates plausible input from a typo flash.
+function plausiblyAttachable(value) {
+  if (/^\d+$/.test(value)) return Number(value) >= 1 && Number(value) <= 65535;
+  return /^(dsh web:\s*)?http:\/\/127\.0\.0\.1:/.test(value);
+}
+
 formEl.addEventListener("submit", function (event) {
   event.preventDefault();
   const value = inputEl.value.trim();
-  if (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) {
+  if (value !== "" && plausiblyAttachable(value)) {
     formEl.hidden = true;
-    window.dshDesktop.addHostAtPort(value);
+    window.dshDesktop.addAttach(value);
     return;
   }
   inputEl.classList.add("invalid");

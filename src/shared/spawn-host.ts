@@ -11,6 +11,8 @@ export interface SpawnedHost {
   child: ChildProcess;
   url: string;
   port: number;
+  /** The launch token carried by the URL line (issue #8); absent on a pre-authentication Host. */
+  token?: string;
 }
 
 export interface HostSpawnCommand {
@@ -80,7 +82,7 @@ export function spawnHostUntilUrl(
       for (const line of assembler.push(chunk)) {
         const parsed = parseDshWebLine(line);
         if (parsed) {
-          settle({ child, url: parsed.url, port: parsed.port });
+          settle({ child, url: parsed.url, port: parsed.port, token: parsed.token });
           return;
         }
       }

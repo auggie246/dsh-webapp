@@ -8,29 +8,85 @@ const OK_BODY = JSON.stringify({
   rpcId: "ignored",
   result: {
     ok: true,
-    value: { version: "0.1.1-rc.2", home: "/Users/augustine/.dsh", attachedSessions: 2 },
+    value: { version: "0.1.2-rc.1", home: "/Users/augustine/.dsh", attachedSessions: 2 },
   },
 });
 
+const UNAUTHORIZED_BODY = "dsh web authentication required; reopen the URL printed by dsh web.\n";
+const SESSION_COOKIE = "dsh-auth-cerrt6fk2a=v1.cGF5bG9hZA.sig";
+
+interface FakeRequest {
+  method: string | undefined;
+  url: string | null;
+  cookie: string | null;
+  body: string | null;
+}
+
 interface FakeHost {
   port: number;
+  lastPath: string | null;
   lastBody: string | null;
   lastContentType: string | null;
+  lastCookie: string | null;
+  requests: FakeRequest[];
   close: () => Promise<void>;
 }
 
-async function startFakeHost(
-  reply: { status?: number; body?: string; hang?: boolean } = {}
-): Promise<FakeHost> {
+interface FakeReply {
+  status?: number;
+  body?: string;
+  hang?: boolean;
+  auth?: { token: string };
+  /** When set, the modern settings/describe endpoint answers (else 404). */
+  modern?: { status?: number; body?: string };
+}
+
+async function startFakeHost(reply: FakeReply = {}): Promise<FakeHost> {
+  const requests: FakeRequest[] = [];
+  let lastPath: string | null = null;
   let lastBody: string | null = null;
   let lastContentType: string | null = null;
+  let lastCookie: string | null = null;
   const httpServer: Server = createServer((req: IncomingMessage, res) => {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
+      const cookie = req.headers["cookie"] ?? null;
+      const path = req.url ?? "";
+      requests.push({ method: req.method, url: req.url ?? null, cookie, body });
+      lastPath = req.url ?? null;
       lastBody = body;
       lastContentType = req.headers["content-type"] ?? null;
+      lastCookie = cookie;
       if (reply.hang) return; // never respond
+      if (reply.auth && req.method === "GET" && path.startsWith("/?token=")) {
+        // A 0.1.2-rc.1 Host: GET /?token=<t> mints the session cookie.
+        if (path === `/?token=${encodeURIComponent(reply.auth.token)}`) {
+          res.statusCode = 303;
+          res.setHeader("location", "/");
+          res.setHeader("set-cookie", `${SESSION_COOKIE}; Path=/; HttpOnly; SameSite=Strict`);
+          res.end();
+        } else {
+          res.statusCode = 401;
+          res.end(UNAUTHORIZED_BODY);
+        }
+        return;
+      }
+      // Every other request needs the session cookie on an auth Host; the
+      // path dispatch is otherwise the same for both Host generations.
+      if (reply.auth && req.headers["cookie"] !== SESSION_COOKIE) {
+        res.statusCode = 401;
+        res.setHeader("content-type", "application/json");
+        res.end(UNAUTHORIZED_BODY);
+        return;
+      }
+      if (path === "/api/settings/describe") {
+        // A pre-auth Host does not know the modern endpoint at all.
+        res.statusCode = reply.modern ? (reply.modern.status ?? 200) : 404;
+        res.setHeader("content-type", "application/json");
+        res.end(res.statusCode === 200 ? (reply.modern?.body ?? reply.body ?? OK_BODY) : "not found");
+        return;
+      }
       res.statusCode = reply.status ?? 200;
       res.setHeader("content-type", "application/json");
       res.end(reply.body ?? OK_BODY);
@@ -41,11 +97,20 @@ async function startFakeHost(
   let closed = false;
   return {
     port,
+    get lastPath() {
+      return lastPath;
+    },
     get lastBody() {
       return lastBody;
     },
     get lastContentType() {
       return lastContentType;
+    },
+    get lastCookie() {
+      return lastCookie;
+    },
+    get requests() {
+      return requests;
     },
     close: () => {
       if (closed) return Promise.resolve();
@@ -58,9 +123,7 @@ async function startFakeHost(
 }
 
 const fakeHosts: FakeHost[] = [];
-async function started(
-  reply?: Parameters<typeof startFakeHost>[0]
-): Promise<FakeHost> {
+async function started(reply?: FakeReply): Promise<FakeHost> {
   const fakeHost = await startFakeHost(reply);
   fakeHosts.push(fakeHost);
   return fakeHost;
@@ -76,18 +139,38 @@ describe("probeHost", () => {
     const result = await probeHost(fakeHost.port, { timeoutMs: 2000 });
     expect(result).toEqual({
       ok: true,
-      info: { version: "0.1.1-rc.2", home: "/Users/augustine/.dsh", attachedSessions: 2 },
+      info: { version: "0.1.2-rc.1", home: "/Users/augustine/.dsh", attachedSessions: 2 },
     });
+  });
+
+  test("pings the modern endpoint first, then falls back to host.describe", async () => {
+    const fakeHost = await started();
+    await probeHost(fakeHost.port, { timeoutMs: 2000 });
+    expect(fakeHost.requests.map((request) => `${request.method} ${request.url}`)).toEqual([
+      "POST /api/settings/describe",
+      "POST /api/host.describe",
+    ]);
   });
 
   test("sends the host.describe client-request envelope as JSON", async () => {
     const fakeHost = await started();
     await probeHost(fakeHost.port, { timeoutMs: 2000 });
-    const envelope = JSON.parse(fakeHost.lastBody ?? "{}") as Record<string, unknown>;
+    const describe = fakeHost.requests.find((request) => request.url === "/api/host.describe");
+    const envelope = JSON.parse(describe?.body ?? "{}") as Record<string, unknown>;
     expect(envelope.type).toBe("client-request");
     expect(envelope.method).toBe("host.describe");
     expect(typeof envelope.rpcId).toBe("string");
     expect(fakeHost.lastContentType).toContain("application/json");
+  });
+
+  test("accepts a modern Host that answers the authenticated API (issue #8)", async () => {
+    const fakeHost = await started({ modern: {} });
+    const result = await probeHost(fakeHost.port, { timeoutMs: 2000 });
+    expect(result).toEqual({ ok: true, info: { modern: true } });
+    const ping = fakeHost.requests.find((request) => request.url === "/api/settings/describe");
+    const envelope = JSON.parse(ping?.body ?? "{}") as Record<string, unknown>;
+    expect(envelope.method).toBe("settings/describe");
+    expect(envelope.payload).toEqual({ args: {} });
   });
 
   test("refuses a fake Host that answers not-ok", async () => {
@@ -120,5 +203,58 @@ describe("probeHost", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/150ms/);
     expect(Date.now() - startedAt).toBeLessThan(2000);
+  });
+});
+
+describe("probeHost against an authenticating Host (issue #8)", () => {
+  test("exchanges the token for the session cookie, then pings with it", async () => {
+    const fakeHost = await started({ auth: { token: "s3cret-token" }, modern: {} });
+    const result = await probeHost(fakeHost.port, {
+      token: "s3cret-token",
+      timeoutMs: 2000,
+    });
+    expect(result).toEqual({ ok: true, info: { modern: true } });
+    expect(fakeHost.requests.map((request) => `${request.method} ${request.url}`)).toEqual([
+      "GET /?token=s3cret-token",
+      "POST /api/settings/describe",
+    ]);
+    expect(fakeHost.lastCookie).toBe(SESSION_COOKIE);
+  });
+
+  test("falls back to host.describe with the cookie on a legacy answer", async () => {
+    const fakeHost = await started({ auth: { token: "s3cret-token" } });
+    const result = await probeHost(fakeHost.port, {
+      token: "s3cret-token",
+      timeoutMs: 2000,
+    });
+    expect(result).toEqual({
+      ok: true,
+      info: { version: "0.1.2-rc.1", home: "/Users/augustine/.dsh", attachedSessions: 2 },
+    });
+    const describe = fakeHost.requests.find((request) => request.url === "/api/host.describe");
+    expect(describe?.cookie).toBe(SESSION_COOKIE);
+  });
+
+  test("reports authRequired when no token is supplied", async () => {
+    const fakeHost = await started({ auth: { token: "s3cret-token" } });
+    const result = await probeHost(fakeHost.port, { timeoutMs: 2000 });
+    expect(result).toEqual({
+      ok: false,
+      reason: "HTTP 401 (dsh web authentication required)",
+      authRequired: true,
+    });
+  });
+
+  test("reports authRequired when the Host rejects the token", async () => {
+    const fakeHost = await started({ auth: { token: "s3cret-token" } });
+    const result = await probeHost(fakeHost.port, {
+      token: "stale-token",
+      timeoutMs: 2000,
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "HTTP 401 (dsh web authentication required)",
+      authRequired: true,
+    });
   });
 });

@@ -50,6 +50,18 @@ describe("spawnHostUntilUrl", () => {
     track(host.child);
     expect(host.url).toBe("http://127.0.0.1:4123");
     expect(host.port).toBe(4123);
+    expect(host.token).toBeUndefined();
+  });
+
+  test("carries the launch token a 0.1.2-rc.1 Host prints (issue #8)", async () => {
+    const host = await spawnHostUntilUrl(process.execPath, [
+      "-e",
+      `console.log("dsh web: http://127.0.0.1:4125/?token=t0k3n-abc (LAN: http://10.0.0.2:4125/?token=t0k3n-abc)");`,
+    ]);
+    track(host.child);
+    expect(host.url).toBe("http://127.0.0.1:4125/?token=t0k3n-abc");
+    expect(host.port).toBe(4125);
+    expect(host.token).toBe("t0k3n-abc");
   });
 
   test("hands the child to onChild the moment it exists, before the URL line", async () => {

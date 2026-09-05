@@ -99,12 +99,21 @@ function latest(harness: Harness): HostBarState {
   return state;
 }
 
-function spawnAnswers(child: ChildProcess, port: number): void {
+function spawnAnswers(
+  child: ChildProcess,
+  port: number,
+  token?: string
+): void {
   mocks.resolveDshBinary.mockReturnValue("/usr/bin/dsh");
   mocks.spawnHostUntilUrl.mockImplementation(
     (_command: string, _args: string[], options?: { onChild?: (child: ChildProcess) => void }) => {
       options?.onChild?.(child);
-      return Promise.resolve({ child, url: `http://127.0.0.1:${port}`, port });
+      return Promise.resolve({
+        child,
+        url: token === undefined ? `http://127.0.0.1:${port}` : `http://127.0.0.1:${port}/?token=${token}`,
+        port,
+        ...(token === undefined ? {} : { token }),
+      });
     }
   );
   mocks.probeHost.mockResolvedValue({ ok: true, info: { version: "1.2.3" } });
@@ -193,5 +202,98 @@ describe("HostManager remove", () => {
 
     expect(harness.views.remove).not.toHaveBeenCalled();
     expect(harness.emitted.length).toBe(before);
+  });
+});
+
+describe("Hosts and Host authentication (issue #8)", () => {
+  test("a Spawn probes with the printed token and loads the authenticated URL", async () => {
+    const harness = makeManager();
+    spawnAnswers(makeChild(4247), 4127, "t0k3n-abc");
+    await harness.manager.newSpawn();
+
+    expect(mocks.probeHost).toHaveBeenCalledWith(4127, { token: "t0k3n-abc" });
+    expect(harness.createdUrls).toEqual(["http://127.0.0.1:4127/?token=t0k3n-abc"]);
+    expect(latest(harness).hosts[0]?.status).toBe("ready");
+  });
+
+  test("a modern Host is ready without a version — the authenticated API is the proof", async () => {
+    const harness = makeManager();
+    mocks.resolveDshBinary.mockReturnValue("/usr/bin/dsh");
+    mocks.spawnHostUntilUrl.mockResolvedValue({
+      child: makeChild(4249),
+      url: "http://127.0.0.1:4129/?token=t0k3n-abc",
+      port: 4129,
+      token: "t0k3n-abc",
+    });
+    mocks.probeHost.mockResolvedValue({ ok: true, info: { modern: true } });
+    await harness.manager.newSpawn();
+
+    expect(latest(harness).hosts[0]?.status).toBe("ready");
+    expect(harness.createdUrls).toEqual(["http://127.0.0.1:4129/?token=t0k3n-abc"]);
+  });
+
+  test("a Spawn entry never persists a token — each launch mints a fresh one", async () => {
+    const harness = makeManager();
+    spawnAnswers(makeChild(4248), 4128, "t0k3n-abc");
+    await harness.manager.newSpawn();
+
+    expect(loadHostBar(harness.barFile)).toEqual([
+      expect.objectContaining({ kind: "spawn", port: 4128 }),
+    ]);
+    expect(JSON.stringify(loadHostBar(harness.barFile))).not.toContain("t0k3n-abc");
+  });
+
+  test("attaching with a pasted token probes, loads, and persists it", async () => {
+    const harness = makeManager();
+    mocks.probeHost.mockResolvedValue({ ok: true, info: { version: "1.2.3" } });
+    await harness.manager.addAttach(4077, "s3cret-token");
+
+    expect(mocks.probeHost).toHaveBeenCalledWith(4077, { token: "s3cret-token" });
+    expect(harness.createdUrls).toEqual(["http://127.0.0.1:4077/?token=s3cret-token"]);
+    expect(loadHostBar(harness.barFile)).toEqual([
+      expect.objectContaining({ kind: "attach", port: 4077, token: "s3cret-token" }),
+    ]);
+  });
+
+  test("an auth-required probe marks the attach offline with a note, and no view", async () => {
+    const harness = makeManager();
+    mocks.probeHost.mockResolvedValue({
+      ok: false,
+      reason: "HTTP 401 (dsh web authentication required)",
+      authRequired: true,
+    });
+    await harness.manager.addAttach(4078);
+
+    const state = latest(harness);
+    expect(state.hosts[0]?.status).toBe("offline");
+    expect(state.hosts[0]?.note).toMatch(/authenticated URL/);
+    expect(harness.createdUrls).toEqual([]);
+  });
+
+  test("an offline retry passes the stored token again", async () => {
+    const harness = makeManager();
+    mocks.probeHost.mockResolvedValueOnce({
+      ok: false,
+      reason: "HTTP 401 (dsh web authentication required)",
+      authRequired: true,
+    });
+    await harness.manager.addAttach(4079, "s3cret-token");
+    mocks.probeHost.mockResolvedValueOnce({ ok: true, info: { version: "1.2.3" } });
+    harness.manager.select(latestId(harness)); // clicking an offline Host retries it
+    await vi.waitFor(() => {
+      expect(mocks.probeHost).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mocks.probeHost).toHaveBeenLastCalledWith(4079, { token: "s3cret-token" });
+    expect(harness.createdUrls).toEqual(["http://127.0.0.1:4079/?token=s3cret-token"]);
+  });
+
+  test("bootstrap attaches to a legacy tokenless Host exactly as before", async () => {
+    const harness = makeManager();
+    mocks.probeHost.mockResolvedValue({ ok: true, info: { version: "1.2.3" } });
+    await harness.manager.bootstrap();
+
+    expect(mocks.probeHost.mock.calls.filter(([port]) => port === 3080).length).toBeGreaterThan(0);
+    expect(harness.createdUrls).toEqual(["http://127.0.0.1:3080"]);
   });
 });
