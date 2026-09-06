@@ -245,10 +245,24 @@ function readSmokeEvents(file) {
 }
 
 async function waitForDescribe(port, timeoutMs, token) {
+  // Mirror the app's probe (issue #8): with a token, mint the session cookie
+  // first; then ping the modern remote API (`settings/describe`, any
+  // server-response proves a Host) and fall back to the pre-auth
+  // `host.describe`, which is gone (404) on a 0.1.2 Host.
   const cookie = token === undefined ? undefined : await mintSessionCookie(port, token);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const response = await fetch(`http://127.0.0.1:${port}/api/host.describe`, {
+    const modern = await fetch(`http://127.0.0.1:${port}/api/settings/describe`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(cookie === undefined ? {} : { cookie }),
+      },
+      body: JSON.stringify({ type: "client-request", rpcId: "native-smoke", method: "settings/describe", payload: { args: {} } }),
+      signal: AbortSignal.timeout(1_000),
+    }).then(async (result) => result.ok ? result.json().catch(() => null) : null, () => null);
+    if (modern?.type === "server-response") return modern;
+    const legacy = await fetch(`http://127.0.0.1:${port}/api/host.describe`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -256,11 +270,11 @@ async function waitForDescribe(port, timeoutMs, token) {
       },
       body: JSON.stringify({ type: "client-request", rpcId: "native-smoke", method: "host.describe", payload: {} }),
       signal: AbortSignal.timeout(1_000),
-    }).then(async (result) => result.ok ? result.json() : null, () => null);
-    if (response?.type === "server-response" && response?.result?.ok === true) return response;
+    }).then(async (result) => result.ok ? result.json().catch(() => null) : null, () => null);
+    if (legacy?.type === "server-response" && legacy?.result?.ok === true) return legacy;
     await delay(250);
   }
-  fail(`Host port ${port} did not answer host.describe`);
+  fail(`Host port ${port} did not answer describe`);
 }
 
 /** Trades the Host's launch token for its session cookie (issue #8), like the app's probe. */
