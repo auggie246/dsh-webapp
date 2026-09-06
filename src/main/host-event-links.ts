@@ -2,7 +2,8 @@
 // /api/events.mux and one to /api/events.host, opened by the app itself so
 // notifications fire even when no Host page is focused — or loaded at all.
 // Reconnects run on exponential backoff (500 ms doubling to 8 s, reset on
-// open). Router state lives per Host and survives reconnects, so the mux's
+// open), tracked per downlink so one path's backoff never starves the other.
+// Router state lives per Host and survives reconnects, so the mux's
 // reconnect replay of pending approval/question frames does not re-notify.
 //
 // Since DSH 0.1.2-rc.1 (issue #8) the upgrade handshake needs the Host's
@@ -55,6 +56,12 @@ export interface HostEventWatchesDeps {
   openSocket?: SocketOpener;
 }
 
+/** One downlink's backoff state; keyed by its path on the Link. */
+interface LinkRetry {
+  timer: NodeJS.Timeout | null;
+  delay: number;
+}
+
 interface Link {
   hostId: string;
   label: string;
@@ -62,8 +69,8 @@ interface Link {
   token?: string;
   router: HostEventRouter;
   sockets: EventSocket[];
-  retryTimer: NodeJS.Timeout | null;
-  retryDelay: number;
+  /** Per-downlink backoff, keyed by the downlink's path. */
+  retries: Map<string, LinkRetry>;
   stopped: boolean;
 }
 
@@ -129,8 +136,7 @@ export class HostEventWatches {
       ...(token === undefined ? {} : { token }),
       router: new HostEventRouter({ hostLabel: label }),
       sockets: [],
-      retryTimer: null,
-      retryDelay: RETRY_BASE_MS,
+      retries: new Map(),
       stopped: false,
     };
     this.links.set(hostId, link);
@@ -177,7 +183,7 @@ export class HostEventWatches {
     }
     link.sockets.push(socket);
     socket.addEventListener("open", () => {
-      link.retryDelay = RETRY_BASE_MS;
+      this.retryOf(link, eventPath).delay = RETRY_BASE_MS;
       this.deps.log?.(`events: connected ${link.label} ${eventPath.path}`);
     });
     socket.addEventListener("message", (event) => {
@@ -198,26 +204,43 @@ export class HostEventWatches {
     socket.addEventListener("error", goodbye);
   }
 
+  /** The downlink's backoff state, created on first use. */
+  private retryOf(
+    link: Link,
+    eventPath: { path: string; stream: EventStream }
+  ): LinkRetry {
+    let retry = link.retries.get(eventPath.path);
+    if (!retry) {
+      retry = { timer: null, delay: RETRY_BASE_MS };
+      link.retries.set(eventPath.path, retry);
+    }
+    return retry;
+  }
+
   private scheduleRetry(
     link: Link,
     eventPath: { path: string; stream: EventStream }
   ): void {
-    if (link.stopped || link.retryTimer) return;
-    const delay = link.retryDelay;
-    link.retryDelay = Math.min(RETRY_MAX_MS, link.retryDelay * 2);
+    if (link.stopped) return;
+    const retry = this.retryOf(link, eventPath);
+    if (retry.timer) return;
+    const delay = retry.delay;
+    retry.delay = Math.min(RETRY_MAX_MS, retry.delay * 2);
     const timer = setTimeout(() => {
-      link.retryTimer = null;
+      retry.timer = null;
       this.connect(link, eventPath);
     }, delay);
     timer.unref?.();
-    link.retryTimer = timer;
+    retry.timer = timer;
   }
 
   private closeLink(link: Link): void {
     link.stopped = true;
-    if (link.retryTimer) {
-      clearTimeout(link.retryTimer);
-      link.retryTimer = null;
+    for (const retry of link.retries.values()) {
+      if (retry.timer) {
+        clearTimeout(retry.timer);
+        retry.timer = null;
+      }
     }
     for (const socket of link.sockets) {
       try {

@@ -155,7 +155,18 @@ async function runScenario(app, dsh, kind) {
     attached = await startDsh(dsh);
     port = attached.port;
   }
-  writeFileSync(path.join(userData, "host-bar.json"), JSON.stringify([{ id: `smoke-${kind}`, kind, port, label: "Host 1" }]));
+  writeFileSync(
+    path.join(userData, "host-bar.json"),
+    JSON.stringify([
+      {
+        id: `smoke-${kind}`,
+        kind,
+        port,
+        label: "Host 1",
+        ...(kind === "attach" && attached?.token !== undefined ? { token: attached.token } : {}),
+      },
+    ])
+  );
   const env = {
     ...process.env,
     ...app.env,
@@ -175,7 +186,7 @@ async function runScenario(app, dsh, kind) {
       await waitForPortState(ready.port, false, 15_000);
       if (ready.pid) await waitForPidExit(ready.pid, 15_000);
     } else {
-      await waitForDescribe(ready.port, 5_000);
+      await waitForDescribe(ready.port, 5_000, attached?.token);
       await waitForPortState(ready.port, true, 5_000);
     }
     console.log(`✓ ${app.label} ${kind}`);
@@ -193,10 +204,14 @@ function startDsh(executable) {
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
       output += chunk;
-      const match = /dsh web:\s+http:\/\/127\.0\.0\.1:(\d+)/.exec(output);
+      // The URL line carries the Host's launch token since DSH 0.1.2
+      // (issue #8); a tokenless line means a pre-authentication Host. The
+      // token is required on the bar entry, or the app's attach probe is
+      // refused with 401 and the Host never goes ready.
+      const match = /dsh web:\s+http:\/\/127\.0\.0\.1:(\d+)(?:\/\?token=(\S+))?/.exec(output);
       if (match) {
         clearTimeout(timer);
-        resolve({ child, port: Number(match[1]) });
+        resolve({ child, port: Number(match[1]), ...(match[2] === undefined ? {} : { token: match[2] }) });
       }
     });
     child.stderr.pipe(process.stderr);
@@ -229,12 +244,16 @@ function readSmokeEvents(file) {
   return readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
-async function waitForDescribe(port, timeoutMs) {
+async function waitForDescribe(port, timeoutMs, token) {
+  const cookie = token === undefined ? undefined : await mintSessionCookie(port, token);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const response = await fetch(`http://127.0.0.1:${port}/api/host.describe`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(cookie === undefined ? {} : { cookie }),
+      },
       body: JSON.stringify({ type: "client-request", rpcId: "native-smoke", method: "host.describe", payload: {} }),
       signal: AbortSignal.timeout(1_000),
     }).then(async (result) => result.ok ? result.json() : null, () => null);
@@ -242,6 +261,18 @@ async function waitForDescribe(port, timeoutMs) {
     await delay(250);
   }
   fail(`Host port ${port} did not answer host.describe`);
+}
+
+/** Trades the Host's launch token for its session cookie (issue #8), like the app's probe. */
+async function mintSessionCookie(port, token) {
+  const response = await fetch(`http://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`, {
+    redirect: "manual",
+    signal: AbortSignal.timeout(1_000),
+  });
+  if (response.status === 401) fail(`Host port ${port} rejected its launch token`);
+  const pairs = response.headers.getSetCookie().map((pair) => pair.split(";")[0]?.trim() ?? "").filter(Boolean);
+  if (pairs.length === 0) fail(`Host port ${port} minted no session cookie`);
+  return pairs.join("; ");
 }
 
 async function waitForPortState(port, expectedUp, timeoutMs) {
