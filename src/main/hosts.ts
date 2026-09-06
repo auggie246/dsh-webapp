@@ -1,8 +1,9 @@
 // The Host registry (issue #1): every Host the bar lists, its live state, its
 // child process when Spawned, and its WebContentsView when ready. Startup
-// follows the bar file; an empty bar follows attach-or-spawn on the default
-// port. Persistence (item 4), retry-on-click, and the quit-kill inventory
-// (item 6) all read from this one place.
+// follows the bar file; an empty bar Spawns (issue #8: Attach needs the
+// launch token only the Host's own process knows, so there is no default
+// attach port). Persistence (item 4), retry-on-click, and the quit-kill
+// inventory (item 6) all read from this one place.
 import { randomUUID } from "node:crypto";
 import type { ChildProcess } from "node:child_process";
 import type { WebContentsView } from "electron";
@@ -18,8 +19,6 @@ import type { HostBarState, HostStatus } from "../shared/host-bar-protocol";
 import { spawnHostUntilUrl } from "../shared/spawn-host";
 import { terminateAll } from "../shared/terminate-all";
 import { hostWebUrl } from "../shared/url-line";
-
-export const DEFAULT_ATTACH_PORT = 3080;
 
 function incompatibleHostMessage(actual: string | undefined, minimum: string): string {
   const received = actual ?? "an unknown version";
@@ -95,7 +94,7 @@ export class HostManager {
       );
   }
 
-  /** Re-attach and re-spawn every bar entry (item 4); empty bar → attach-or-spawn (item 2). */
+  /** Re-attach and re-spawn every bar entry (item 4); empty bar → Spawn (item 2, post-issue #8). */
   async bootstrap(): Promise<void> {
     let entries = loadHostBar(this.deps.barFile);
     if (entries.length === 0) {
@@ -350,18 +349,10 @@ export class HostManager {
     this.deps.views.put(record.entry.id, view, record.entry.id === this.activeId);
   }
 
-  /** Item 2: Attach when a Host already answers on the default port; Spawn otherwise. */
+  /** Item 2 (post-issue #8): an empty bar always Spawns — a default attach can never
+   *  get the token a separately started modern Host requires. */
   private async firstEntry(): Promise<BarEntry> {
     const label = this.nextLabelFrom([]);
-    const probe = await probeHost(DEFAULT_ATTACH_PORT);
-    if (probe.ok) {
-      return { id: randomUUID(), kind: "attach", port: DEFAULT_ATTACH_PORT, label };
-    }
-    // An authenticating Host is not attachable without the launch token only
-    // its own process knows (issue #8) — Spawn gives the app its own URL line.
-    if (!probe.authRequired) {
-      this.log(`no Host on port ${DEFAULT_ATTACH_PORT}: ${probe.reason}`);
-    }
     return { id: randomUUID(), kind: "spawn", port: 0, label };
   }
 

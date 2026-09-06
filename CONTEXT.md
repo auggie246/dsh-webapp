@@ -29,8 +29,8 @@ Forget a Host from the Host bar. A Spawned Host's process is stopped with the qu
 _Avoid_: Delete, kill, close
 
 **Attach-or-spawn**:
-The startup rule of DSH Desktop: Attach when a Host is found; Spawn otherwise.
-_Avoid_: Find-or-launch, auto-discovery
+The startup rule of DSH Desktop: on an empty Host bar the app always Spawns its own Host; Attach happens only when the user adds a Host by pasting its authenticated URL.
+_Avoid_: Find-or-launch, auto-discovery, default port attach
 
 **Tray**:
 The operating-system status area that keeps DSH Desktop available while its main window is hidden.

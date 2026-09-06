@@ -288,12 +288,17 @@ describe("Hosts and Host authentication (issue #8)", () => {
     expect(harness.createdUrls).toEqual(["http://127.0.0.1:4079/?token=s3cret-token"]);
   });
 
-  test("bootstrap attaches to a legacy tokenless Host exactly as before", async () => {
+  test("bootstrap on an empty bar spawns without probing the default port", async () => {
     const harness = makeManager();
-    mocks.probeHost.mockResolvedValue({ ok: true, info: { version: "1.2.3" } });
+    spawnAnswers(makeChild(4250), 4128, "t0k3n");
     await harness.manager.bootstrap();
 
-    expect(mocks.probeHost.mock.calls.filter(([port]) => port === 3080).length).toBeGreaterThan(0);
-    expect(harness.createdUrls).toEqual(["http://127.0.0.1:3080"]);
+    // The spawned Host's port is probed, but never the default attach port.
+    expect(mocks.probeHost.mock.calls.every(([port]) => port !== 3080)).toBe(true);
+    expect(mocks.spawnHostUntilUrl).toHaveBeenCalled();
+    expect(harness.createdUrls).toEqual(["http://127.0.0.1:4128/?token=t0k3n"]);
+    expect(loadHostBar(harness.barFile)).toEqual([
+      expect.objectContaining({ kind: "spawn", port: 4128 }),
+    ]);
   });
 });

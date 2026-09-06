@@ -56,7 +56,7 @@ Download the package for your platform from [GitHub Releases](https://github.com
 
 ### 2. Open DSH Desktop
 
-DSH Desktop uses attach-or-spawn. It attaches to an existing Host, or spawns one with the installed `dsh`.
+On startup DSH Desktop always Spawns a Host with the installed `dsh` and connects to it. To connect to a Host you already run, choose "Add Host at port or URL…" and paste the authenticated `dsh web:` URL (including its token).
 
 If DSH Desktop cannot find `dsh`, its setup screen can retry detection or use an explicit path.
 
